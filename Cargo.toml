@@ -13,3 +13,4 @@ repository = "https://github.com/TakuKitamura/history-tidy"
 name = "history-tidy"
 
 [dependencies]
+clap = "2.34.0"
