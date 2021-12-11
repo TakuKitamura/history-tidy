@@ -14,3 +14,4 @@ name = "history-tidy"
 
 [dependencies]
 clap = "2.34.0"
+dirs = "4.0.0"
