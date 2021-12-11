@@ -1,0 +1,15 @@
+[package]
+name = "history-tidy"
+description = "Tidy history list with tags"
+version = "0.1.0"
+authors = ["TakuKitamura <takukitamura.io@gmail.com>"]
+categories = ["command-line-utilities"]
+readme = "README.md"
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/TakuKitamura/history-tidy"
+
+[[bin]]
+name = "history-tidy"
+
+[dependencies]
