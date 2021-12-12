@@ -32,17 +32,18 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
     };
 }
 
-#[derive(Debug)]
-struct History {
-    history: Vec<String>,
-    message: String,
-}
+// #[derive(Debug)]
+// struct History {
+//     history: Vec<String>,
+//     message: String,
+// }
 
 fn main() {
     match get_tidy_history() {
         Ok(history_vec) => {
-            let mut map: HashMap<String, History> = HashMap::new();
-            for history in history_vec {
+            // tag: command: message
+            let mut map: HashMap<String, HashMap<String, String>> = HashMap::new();
+            for history in &history_vec {
                 let lexer = Lexer::new(history.chars());
                 let mut parser = DefaultParser::new(lexer);
 
@@ -69,34 +70,26 @@ fn main() {
                                 }
                             }
                             message = message.trim().to_string();
-                            println!("message:{}", message);
+                            // println!("message:{}", message);
 
                             for hashtag in hashtags {
                                 let text = format!("#{}", hashtag.text.to_string().to_owned());
                                 if map.contains_key(&text) == false {
+                                    let mut map_hashtag: HashMap<String, String> = HashMap::new();
+                                    map_hashtag.insert(history.to_string(), message.to_string());
                                     map.insert(
-                                        text,
-                                        History {
-                                            history: vec![(&history).to_string()],
-                                            message: message.to_owned(),
-                                        },
+                                        text, // tag
+                                        map_hashtag,
                                     );
                                 } else {
-                                    if map
-                                        .get_mut(&text)
-                                        .unwrap()
-                                        .history
-                                        .iter()
-                                        .any(|h| h == history)
-                                        == false
-                                    {
-                                        map.get_mut(&text)
-                                            .unwrap()
-                                            .history
-                                            .push((&history).to_string());
+                                    let map_hashtag = map.get_mut(&text).unwrap();
+                                    if map_hashtag.contains_key(history) == false {
+                                        map_hashtag
+                                            .insert(history.to_string(), message.to_string());
                                     }
-                                    if message.is_empty() == false {
-                                        map.get_mut(&text).unwrap().message = message.to_owned();
+                                    let map_history = map_hashtag.get_mut(history).unwrap();
+                                    if message.to_string().len() != 0 {
+                                        *map_history = message.to_string();
                                     }
                                 }
                             }
@@ -105,7 +98,36 @@ fn main() {
                     Err(e) => {}
                 }
             }
-            println!("{:?}", map);
+
+            for (tag, map_hashtag) in &map {
+                println!("tag:{}", tag);
+                // for (history, message) in map_hashtag {
+                //     println!("history:{}", history);
+                //     println!("message:{}", message);
+                // }
+            }
+
+            // for (tag, map_hashtag) in &map {
+            //     let x = map.get_key_value("#abc");
+            for (_, message) in map.get_key_value("#abc") {
+                for (y, z) in message {
+                    // get history index in enmuulate history_vec
+                    let mut i = 1;
+                    for h in &history_vec {
+                        if h.trim() == y.trim() {
+                            println!("#abc:id:{}", i);
+                            break;
+                        }
+                        i += 1;
+                    }
+
+                    println!("#abc:history:{}", y);
+                    println!("#abc:message:{}", z);
+                }
+                // println!("history:{}", history);
+                // println!("message:{:?}", message);
+            }
+            // }
         }
         Err(e) => {
             eprintln!("Failed to load the file: {}", e);
