@@ -13,8 +13,5 @@ repository = "https://github.com/TakuKitamura/history-tidy"
 name = "history-tidy"
 
 [dependencies]
-clap = "2.34.0"
 dirs = "4.0.0"
-tui = "0.16"
-crossterm = "0.22"
-termion = "1.5"
+conch-parser = "0.1.0"
