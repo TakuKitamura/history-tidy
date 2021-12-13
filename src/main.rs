@@ -5,7 +5,10 @@ use conch_parser::parse::DefaultParser;
 use dirs;
 use std::collections::HashMap;
 mod hashtag;
+use duct_sh;
 use hashtag::HashtagParser;
+use std::os::unix::process::CommandExt;
+use std::process::Command;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -142,7 +145,8 @@ fn main() {
             let mut terminal = Terminal::new(backend).unwrap();
 
             let mut app = App::new(map, history_vec);
-            app.next();
+            // app.next();
+            app.state.select(Some(0));
             let res = run_app(&mut terminal, app);
 
             // restore terminal
@@ -169,7 +173,10 @@ fn main() {
 
 struct App {
     state: TableState,
-    items: Vec<Vec<String>>,
+    hashtags: Vec<Vec<String>>,
+    history_map: HashMap<String, HashMap<String, String>>,
+    history: Vec<String>,
+    header_cells: Vec<String>,
 }
 
 impl App {
@@ -184,13 +191,16 @@ impl App {
 
         App {
             state: TableState::default(),
-            items: hashtags,
+            hashtags: hashtags,
+            history_map,
+            history: history,
+            header_cells: vec!["HashTag".to_string(), "Item Count".to_string()],
         }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.hashtags.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -205,7 +215,7 @@ impl App {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.hashtags.len() - 1
                 } else {
                     i - 1
                 }
@@ -217,6 +227,7 @@ impl App {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+    let mut state = 0;
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
 
@@ -225,6 +236,57 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
+                KeyCode::Enter => {
+                    if state == 0 {
+                        let selected = app.state.selected().unwrap();
+                        let item = &app.hashtags[selected];
+                        let history_group = &app.history_map.get(item[0].as_str()).unwrap();
+                        app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
+                        let mut hashtags = vec![];
+                        for (history, message) in history_group.iter() {
+                            hashtags.push(vec![history.to_string(), message.to_string()]);
+                        }
+                        app.hashtags = hashtags;
+                        app.state.select(Some(0));
+                        state = 1;
+                    } else {
+                        return Ok(());
+                    }
+                }
+                KeyCode::Right => {
+                    if state == 0 {
+                        let selected = app.state.selected().unwrap();
+                        let item = &app.hashtags[selected];
+                        let history_group = &app.history_map.get(item[0].as_str()).unwrap();
+                        app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
+                        let mut hashtags = vec![];
+                        for (history, message) in history_group.iter() {
+                            hashtags.push(vec![history.to_string(), message.to_string()]);
+                        }
+                        app.hashtags = hashtags;
+                        app.state.select(Some(0));
+                        state = 1;
+                    }
+                }
+                KeyCode::Left => {
+                    if state == 1 {
+                        app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
+                        app.hashtags = vec![vec![
+                            app.hashtags[0][0].to_string(),
+                            app.hashtags[0][1].to_string(),
+                        ]];
+                        state = 0;
+
+                        let mut hashtags = vec![];
+                        for hashtag in (&app.history_map).keys() {
+                            let item_count = app.history_map.get(hashtag).unwrap().len();
+                            hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
+                        }
+                        app.hashtags = hashtags;
+                        app.state.select(Some(0));
+                        app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
+                    }
+                }
                 _ => {}
             }
         }
@@ -240,14 +302,15 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     let normal_style = Style::default().bg(Color::Blue);
-    let header_cells = ["Tags", "Item"]
+    let xxx: Vec<&str> = app.header_cells.iter().map(|s| &**s).collect();
+    let header_cells = xxx
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
     let header = Row::new(header_cells)
         .style(normal_style)
         .height(1)
         .bottom_margin(1);
-    let rows = app.items.iter().map(|item| {
+    let rows = app.hashtags.iter().map(|item| {
         let height = item
             .iter()
             .map(|content| content.chars().filter(|c| *c == '\n').count())
