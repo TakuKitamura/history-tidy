@@ -5,10 +5,9 @@ use conch_parser::parse::DefaultParser;
 use dirs;
 use std::collections::HashMap;
 mod hashtag;
-use duct_sh;
 use hashtag::HashtagParser;
-use std::os::unix::process::CommandExt;
-use std::process::Command;
+use std::fs;
+use std::io::Write;
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -29,6 +28,7 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
     match dirs::home_dir() {
         Some(mut history_file_path) => {
             history_file_path.push(".history-tidy");
+            history_file_path.push("history");
             match std::fs::read_to_string(history_file_path) {
                 Ok(history_file_content) => {
                     let history_vec: Vec<String> = history_file_content
@@ -51,28 +51,74 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
     };
 }
 
-// #[derive(Debug)]
-// struct History {
-//     history: Vec<String>,
-//     message: String,
-// }
-
 fn main() {
-    // let matches = clap::App::new("history-tidy")
-    //     .version(crate_version!())
-    //     .author(crate_authors!())
-    //     .about(crate_description!())
-    //     .subcommand(SubCommand::with_name("list").about("listing history with tags"))
-    //     .subcommand(
-    //         SubCommand::with_name("init")
-    //             .about("print the shell script to execute history-tidy")
-    //             .arg(
-    //                 Arg::with_name("shell-type")
-    //                     .possible_values(&["bash"])
-    //                     .required(true),
-    //             ),
-    //     )
-    //     .get_matches();
+    let matches = clap::App::new("history-tidy")
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
+        .subcommand(SubCommand::with_name("load").about("load command selected"))
+        .subcommand(
+            SubCommand::with_name("init")
+                .about("print the shell script to execute history-tidy")
+                .arg(
+                    Arg::with_name("shell-type")
+                        .possible_values(&["bash"])
+                        .required(true),
+                ),
+        )
+        .get_matches();
+
+    if let Some(matches) = matches.subcommand_matches("init") {
+        let shell = matches.value_of("shell-type").unwrap();
+        let init_shell_script = match shell {
+            "bash" => include_str!("../bin/init.bash"),
+            _ => unreachable!(),
+        };
+        println!("{}", init_shell_script);
+        std::process::exit(0);
+    }
+
+    if let Some(matches) = matches.subcommand_matches("load") {
+        let script_path: std::path::PathBuf = match dirs::home_dir() {
+            Some(mut history_file_path) => {
+                history_file_path.push(".history-tidy");
+                history_file_path.push("script");
+                history_file_path
+            }
+            None => {
+                return;
+            }
+        };
+        let script_content = match std::fs::read_to_string(&script_path) {
+            Ok(script_content) => script_content,
+            Err(e) => {
+                println!("{}", e);
+                return;
+            }
+        };
+        // write empty strring to script file
+        let mut script_file = match fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&script_path)
+        {
+            Ok(script_file) => script_file,
+            Err(e) => {
+                println!("{}", e);
+                return;
+            }
+        };
+        let script_file_content = String::new();
+        match script_file.write_all(script_file_content.as_bytes()) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("{}", e);
+                return;
+            }
+        };
+        println!("{}", script_content);
+        std::process::exit(0);
+    }
 
     let mut map: HashMap<String, HashMap<String, String>> = HashMap::new();
     match get_tidy_history() {
@@ -159,8 +205,30 @@ fn main() {
             .unwrap();
             terminal.show_cursor().unwrap();
 
-            if let Err(err) = res {
-                eprintln!("{:?}", err)
+            let script_path: std::path::PathBuf = match dirs::home_dir() {
+                Some(mut history_file_path) => {
+                    history_file_path.push(".history-tidy");
+                    history_file_path.push("script");
+                    history_file_path
+                }
+                None => {
+                    return;
+                }
+            };
+            // write res in script
+            let mut script_file = match std::fs::File::create(script_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{}", e);
+                    return;
+                }
+            };
+            match script_file.write_all(res.as_bytes()) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("{}", e);
+                    return;
+                }
             }
         }
         Err(e) => {
@@ -226,14 +294,14 @@ impl App {
     }
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     let mut state = 0;
     loop {
-        terminal.draw(|f| ui(f, &mut app))?;
+        terminal.draw(|f| ui(f, &mut app)).unwrap();
 
-        if let Event::Key(key) = event::read()? {
+        if let Event::Key(key) = event::read().unwrap() {
             match key.code {
-                KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('q') => return "".to_owned(),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
                 KeyCode::Enter => {
@@ -250,7 +318,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                         app.state.select(Some(0));
                         state = 1;
                     } else {
-                        return Ok(());
+                        let selected = app.state.selected().unwrap();
+                        let item = &app.hashtags[selected];
+                        // println!("{}", item[0]);
+                        return item[0].to_owned();
                     }
                 }
                 KeyCode::Right => {
