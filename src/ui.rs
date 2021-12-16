@@ -65,10 +65,10 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
 
 struct App {
     state: TableState,
-    table_title: String,
+    table_title: &'static str,
     hashtags: Vec<Vec<String>>,
     history_map: HashMap<String, HashMap<String, String>>,
-    header_cells: Vec<String>,
+    header_cells: Vec<&'static str>,
 }
 
 impl App {
@@ -83,10 +83,10 @@ impl App {
 
         App {
             state: TableState::default(),
-            table_title: " Select Hashtag View ".to_owned(),
+            table_title: " Select Hashtag View ",
             hashtags,
             history_map,
-            header_cells: vec!["HashTag".to_string(), "Item Count".to_string()],
+            header_cells: vec!["HashTag", "Item Count"],
         }
     }
 }
@@ -134,10 +134,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 for (history, message) in history_group.iter() {
                     hashtags.push(vec![history.to_string(), message.to_string()]);
                 }
-                app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
+                app.header_cells = vec!["Command", "Comment"];
                 app.hashtags = hashtags;
                 app.state.select(Some(0));
-                app.table_title = " Select Command View ".to_owned();
+                app.table_title = " Select Command View ";
             } else if app.table_title == " Select Command View " && key_code == KeyCode::Enter {
                 let selected = app.state.selected().unwrap();
                 let item = &app.hashtags[selected];
@@ -149,9 +149,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
                 }
                 app.hashtags = hashtags;
-                app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
+                app.header_cells = vec!["HashTag", "Item Count"];
                 app.state.select(Some(0));
-                app.table_title = " Select Hashtag View ".to_owned();
+                app.table_title = " Select Hashtag View ";
             }
         }
     }
@@ -189,7 +189,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(app.table_title.as_str()),
+                .title(app.table_title),
         )
         .highlight_style(selected_style)
         .highlight_symbol("> ")
