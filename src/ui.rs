@@ -65,6 +65,7 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
 
 struct App {
     state: TableState,
+    table_title: String,
     hashtags: Vec<Vec<String>>,
     history_map: HashMap<String, HashMap<String, String>>,
     header_cells: Vec<String>,
@@ -82,105 +83,75 @@ impl App {
 
         App {
             state: TableState::default(),
+            table_title: " Select Hashtag View ".to_owned(),
             hashtags,
             history_map,
             header_cells: vec!["HashTag".to_string(), "Item Count".to_string()],
         }
     }
-    pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.hashtags.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.hashtags.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
-    let mut state = 0;
     loop {
         terminal.draw(|f| ui(f, &mut app)).unwrap();
 
         if let Event::Key(key) = event::read().unwrap() {
-            match key.code {
-                KeyCode::Char('q') => return "".to_owned(),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
-                KeyCode::Enter => {
-                    if state == 0 {
-                        let selected = app.state.selected().unwrap();
-                        let item = &app.hashtags[selected];
-                        let history_group = &app.history_map.get(item[0].as_str()).unwrap();
-                        app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
-                        let mut hashtags = vec![];
-                        for (history, message) in history_group.iter() {
-                            hashtags.push(vec![history.to_string(), message.to_string()]);
+            let key_code = key.code;
+            if key_code == KeyCode::Char('q') {
+                return "".to_owned();
+            } else if key_code == KeyCode::Down {
+                let i = match app.state.selected() {
+                    Some(i) => {
+                        if i >= app.hashtags.len() - 1 {
+                            0
+                        } else {
+                            i + 1
                         }
-                        app.hashtags = hashtags;
-                        app.state.select(Some(0));
-                        state = 1;
-                    } else {
-                        let selected = app.state.selected().unwrap();
-                        let item = &app.hashtags[selected];
-                        // println!("{}", item[0]);
-                        return item[0].to_owned();
                     }
-                }
-                KeyCode::Right => {
-                    if state == 0 {
-                        let selected = app.state.selected().unwrap();
-                        let item = &app.hashtags[selected];
-                        let history_group = &app.history_map.get(item[0].as_str()).unwrap();
-                        app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
-                        let mut hashtags = vec![];
-                        for (history, message) in history_group.iter() {
-                            hashtags.push(vec![history.to_string(), message.to_string()]);
+                    None => 0,
+                };
+                app.state.select(Some(i));
+            } else if key_code == KeyCode::Up {
+                let i = match app.state.selected() {
+                    Some(i) => {
+                        if i == 0 {
+                            app.hashtags.len() - 1
+                        } else {
+                            i - 1
                         }
-                        app.hashtags = hashtags;
-                        app.state.select(Some(0));
-                        state = 1;
                     }
-                }
-                KeyCode::Left => {
-                    if state == 1 {
-                        app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
-                        app.hashtags = vec![vec![
-                            app.hashtags[0][0].to_string(),
-                            app.hashtags[0][1].to_string(),
-                        ]];
-                        state = 0;
+                    None => 0,
+                };
+                app.state.select(Some(i));
+            } else if app.table_title == " Select Hashtag View "
+                && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
+            {
+                let selected = app.state.selected().unwrap();
+                let item = &app.hashtags[selected];
+                let history_group = &app.history_map.get(item[0].as_str()).unwrap();
 
-                        let mut hashtags = vec![];
-                        for hashtag in (&app.history_map).keys() {
-                            let item_count = app.history_map.get(hashtag).unwrap().len();
-                            hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
-                        }
-                        app.hashtags = hashtags;
-                        app.state.select(Some(0));
-                        app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
-                    }
+                let mut hashtags = vec![];
+                for (history, message) in history_group.iter() {
+                    hashtags.push(vec![history.to_string(), message.to_string()]);
                 }
-                _ => {}
+                app.header_cells = vec!["Command".to_string(), "Comment".to_string()];
+                app.hashtags = hashtags;
+                app.state.select(Some(0));
+                app.table_title = " Select Command View ".to_owned();
+            } else if app.table_title == " Select Command View " && key_code == KeyCode::Enter {
+                let selected = app.state.selected().unwrap();
+                let item = &app.hashtags[selected];
+                return item[0].to_owned();
+            } else if app.table_title == " Select Command View " && key_code == KeyCode::Left {
+                let mut hashtags = vec![];
+                for hashtag in (&app.history_map).keys() {
+                    let item_count = app.history_map.get(hashtag).unwrap().len();
+                    hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
+                }
+                app.hashtags = hashtags;
+                app.header_cells = vec!["HashTag".to_string(), "Item Count".to_string()];
+                app.state.select(Some(0));
+                app.table_title = " Select Hashtag View ".to_owned();
             }
         }
     }
@@ -195,10 +166,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
     let normal_style = Style::default().bg(Color::Blue);
-    let xxx: Vec<&str> = app.header_cells.iter().map(|s| &**s).collect();
-    let header_cells = xxx
+    let header_cells = app
+        .header_cells
         .iter()
-        .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
+        .map(|h| Cell::from(&(**h)).style(Style::default().fg(Color::Red)));
     let header = Row::new(header_cells)
         .style(normal_style)
         .height(1)
@@ -218,7 +189,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" History Tags "),
+                .title(app.table_title.as_str()),
         )
         .highlight_style(selected_style)
         .highlight_symbol("> ")
