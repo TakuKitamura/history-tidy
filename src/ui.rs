@@ -57,7 +57,7 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
             return;
         }
     };
-    // write res in script
+
     let mut script_file: File = match File::create(script_path) {
         Ok(file) => file,
         Err(e) => {
@@ -87,10 +87,8 @@ impl App {
         let mut hashtags: Vec<Vec<String>> = vec![];
         for hashtag in (&history_map).keys() {
             let item_count: usize = history_map.get(hashtag).unwrap().len();
-            hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
+            hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
         }
-
-        // println!("{:?}", hashtags);
 
         App {
             state: TableState::default(),
@@ -144,7 +142,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
 
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for (history, message) in history_group.iter() {
-                    hashtags.push(vec![history.to_string(), message.to_string()]);
+                    hashtags.push(vec![history.to_owned(), message.to_owned()]);
                 }
                 app.header_cells = SELECT_COMMAND_HEADER;
                 app.hashtags = hashtags;
@@ -158,7 +156,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for hashtag in (&app.history_map).keys() {
                     let item_count: usize = app.history_map.get(hashtag).unwrap().len();
-                    hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
+                    hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
                 }
                 app.hashtags = hashtags;
                 app.header_cells = SELECT_HASHTAG_HEADER;
@@ -193,7 +191,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             .max()
             .unwrap_or(0)
             + 1;
-        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| content.to_string());
+        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| content.to_owned());
         Row::new(cells).height(height as u16)
     });
     let t: tui::widgets::Table = Table::new(rows)
