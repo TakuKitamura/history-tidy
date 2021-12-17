@@ -12,9 +12,7 @@ use conch_parser::ast::builder;
 use conch_parser::lexer::Lexer;
 use conch_parser::parse::DefaultParser;
 use conch_parser::parse::Parser;
-
-use std::collections::HashMap;
-
+use linked_hash_map::LinkedHashMap;
 use std::str::Chars;
 
 fn get_tidy_history() -> Result<Vec<String>, Error> {
@@ -41,7 +39,7 @@ fn get_tidy_history() -> Result<Vec<String>, Error> {
     };
 }
 
-pub fn get_command_hashmap() -> HashMap<String, HashMap<String, String>> {
+pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, String>> {
     let history_vec: Vec<String> = match get_tidy_history() {
         Ok(history_vec) => history_vec,
         Err(e) => {
@@ -50,7 +48,8 @@ pub fn get_command_hashmap() -> HashMap<String, HashMap<String, String>> {
         }
     };
 
-    let mut command_hashmap: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut command_hashmap: LinkedHashMap<String, LinkedHashMap<String, String>> =
+        LinkedHashMap::new();
     for history in &history_vec {
         let lexer: Lexer<Chars> = Lexer::new(history.chars());
         let mut parser: Parser<Lexer<Chars>, DefaultBuilder<String>> = DefaultParser::new(lexer);
@@ -59,6 +58,18 @@ pub fn get_command_hashmap() -> HashMap<String, HashMap<String, String>> {
             Ok(_) => {
                 let new_line: Vec<Newline> = parser.linebreak();
                 if new_line.is_empty() {
+                    let text: String = "ALL".to_owned();
+                    if command_hashmap.contains_key(&text) == false {
+                        let mut map_hashtag: LinkedHashMap<String, String> = LinkedHashMap::new();
+                        map_hashtag.insert(history.to_owned(), "".to_owned());
+                        command_hashmap.insert(text, map_hashtag);
+                    } else {
+                        let map_hashtag: &mut LinkedHashMap<String, String> =
+                            command_hashmap.get_mut(&text).unwrap();
+                        if map_hashtag.contains_key(history) == false {
+                            map_hashtag.insert(history.to_owned(), "".to_owned());
+                        }
+                    }
                 } else {
                     let hashtags_str: String = new_line[0].0.as_ref().unwrap().to_owned();
                     let history: &String =
@@ -81,11 +92,12 @@ pub fn get_command_hashmap() -> HashMap<String, HashMap<String, String>> {
                     for hashtag in hashtags {
                         let text: String = format!("#{}", hashtag.text.to_owned().to_owned());
                         if command_hashmap.contains_key(&text) == false {
-                            let mut map_hashtag: HashMap<String, String> = HashMap::new();
+                            let mut map_hashtag: LinkedHashMap<String, String> =
+                                LinkedHashMap::new();
                             map_hashtag.insert(history.to_owned(), message.to_owned());
                             command_hashmap.insert(text, map_hashtag);
                         } else {
-                            let map_hashtag: &mut HashMap<String, String> =
+                            let map_hashtag: &mut LinkedHashMap<String, String> =
                                 command_hashmap.get_mut(&text).unwrap();
                             if map_hashtag.contains_key(history) == false {
                                 map_hashtag.insert(history.to_owned(), message.to_owned());
@@ -98,7 +110,20 @@ pub fn get_command_hashmap() -> HashMap<String, HashMap<String, String>> {
                     }
                 }
             }
-            Err(_) => {}
+            Err(_) => {
+                let text: String = "ERR".to_owned();
+                if command_hashmap.contains_key(&text) == false {
+                    let mut map_hashtag: LinkedHashMap<String, String> = LinkedHashMap::new();
+                    map_hashtag.insert(history.to_owned(), "".to_owned());
+                    command_hashmap.insert(text, map_hashtag);
+                } else {
+                    let map_hashtag: &mut LinkedHashMap<String, String> =
+                        command_hashmap.get_mut(&text).unwrap();
+                    if map_hashtag.contains_key(history) == false {
+                        map_hashtag.insert(history.to_owned(), "".to_owned());
+                    }
+                }
+            }
         }
     }
     return command_hashmap;

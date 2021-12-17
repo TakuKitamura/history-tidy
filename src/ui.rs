@@ -4,7 +4,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dirs::home_dir;
-use std::collections::HashMap;
+use linked_hash_map::LinkedHashMap;
 use std::fs::File;
 use std::io::stdout;
 use std::io::Stdout;
@@ -26,7 +26,7 @@ const SELECT_COMMAND_HEADER: [&'static str; 2] = ["Command", "Comment"];
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
 
-pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
+pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
     enable_raw_mode().unwrap();
     let mut stdout: Stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
@@ -78,17 +78,19 @@ struct App {
     state: TableState,
     table_title: &'static str,
     hashtags: Vec<Vec<String>>,
-    history_map: HashMap<String, HashMap<String, String>>,
+    history_map: LinkedHashMap<String, LinkedHashMap<String, String>>,
     header_cells: [&'static str; 2],
 }
 
 impl App {
-    fn new(history_map: HashMap<String, HashMap<String, String>>) -> App {
+    fn new(history_map: LinkedHashMap<String, LinkedHashMap<String, String>>) -> App {
         let mut hashtags: Vec<Vec<String>> = vec![];
         for hashtag in (&history_map).keys() {
             let item_count: usize = history_map.get(hashtag).unwrap().len();
             hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
         }
+
+        hashtags.sort();
 
         App {
             state: TableState::default(),
@@ -137,7 +139,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             {
                 let selected: usize = app.state.selected().unwrap();
                 let item: &Vec<String> = &app.hashtags[selected];
-                let history_group: &&HashMap<String, String> =
+                let history_group: &&LinkedHashMap<String, String> =
                     &app.history_map.get(item[0].as_str()).unwrap();
 
                 let mut hashtags: Vec<Vec<String>> = vec![];
@@ -145,6 +147,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     hashtags.push(vec![history.to_owned(), message.to_owned()]);
                 }
                 app.header_cells = SELECT_COMMAND_HEADER;
+                hashtags.reverse();
                 app.hashtags = hashtags;
                 app.state.select(Some(0));
                 app.table_title = SELECT_COMMAND_TITLE;
@@ -158,6 +161,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     let item_count: usize = app.history_map.get(hashtag).unwrap().len();
                     hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
                 }
+                hashtags.sort();
                 app.hashtags = hashtags;
                 app.header_cells = SELECT_HASHTAG_HEADER;
                 app.state.select(Some(0));
