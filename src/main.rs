@@ -20,7 +20,7 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
                 Ok(history_file_content) => {
                     let history_vec: Vec<String> = history_file_content
                         .lines()
-                        .map(|line| line.to_string().trim().to_string())
+                        .map(|line: &str| line.to_string().trim().to_string())
                         .collect();
                     return Ok(history_vec);
                 }
@@ -39,7 +39,7 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
 }
 
 fn main() {
-    let matches = clap::App::new("history-tidy")
+    let matches: clap::ArgMatches = clap::App::new("history-tidy")
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
@@ -56,8 +56,8 @@ fn main() {
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("init") {
-        let shell = matches.value_of("shell-type").unwrap();
-        let init_shell_script = match shell {
+        let shell: &str = matches.value_of("shell-type").unwrap();
+        let init_shell_script: &str = match shell {
             "bash" => include_str!("../bin/init.bash"),
             _ => unreachable!(),
         };
@@ -65,7 +65,7 @@ fn main() {
         std::process::exit(0);
     }
 
-    if let Some(matches) = matches.subcommand_matches("load") {
+    if let Some(_) = matches.subcommand_matches("load") {
         let script_path: std::path::PathBuf = match dirs::home_dir() {
             Some(mut history_file_path) => {
                 history_file_path.push(".history-tidy");
@@ -76,15 +76,15 @@ fn main() {
                 return;
             }
         };
-        let script_content = match std::fs::read_to_string(&script_path) {
+        let script_content: String = match std::fs::read_to_string(&script_path) {
             Ok(script_content) => script_content,
             Err(e) => {
                 println!("{}", e);
                 return;
             }
         };
-        // write empty strring to script file
-        let mut script_file = match fs::OpenOptions::new()
+
+        let mut script_file: fs::File = match fs::OpenOptions::new()
             .write(true)
             .truncate(true)
             .open(&script_path)
@@ -95,7 +95,7 @@ fn main() {
                 return;
             }
         };
-        let script_file_content = String::new();
+        let script_file_content: String = String::new();
         match script_file.write_all(script_file_content.as_bytes()) {
             Ok(_) => {}
             Err(e) => {
@@ -108,48 +108,48 @@ fn main() {
     }
 
     let mut map: HashMap<String, HashMap<String, String>> = HashMap::new();
-    let history_vec = match get_tidy_history() {
+    let history_vec: Vec<String> = match get_tidy_history() {
         Ok(history_vec) => history_vec,
         Err(e) => {
             println!("{}", e);
-            // return;
             vec![]
         }
     };
 
-    // tag: command: message
-
     for history in &history_vec {
-        let lexer = Lexer::new(history.chars());
-        let mut parser = DefaultParser::new(lexer);
+        let lexer: conch_parser::lexer::Lexer<std::str::Chars> = Lexer::new(history.chars());
+        let mut parser: conch_parser::parse::Parser<
+            conch_parser::lexer::Lexer<std::str::Chars>,
+            conch_parser::ast::builder::DefaultBuilder<String>,
+        > = DefaultParser::new(lexer);
 
         match parser.and_or_list() {
-            Ok(ast) => {
-                let new_line = parser.linebreak();
+            Ok(_) => {
+                let new_line: Vec<conch_parser::ast::builder::Newline> = parser.linebreak();
                 if new_line.is_empty() {
                 } else {
-                    let hashtags_str = new_line[0].0.as_ref().unwrap().to_owned();
-                    let history = &history
+                    let hashtags_str: String = new_line[0].0.as_ref().unwrap().to_owned();
+                    let history: &String = &history
                         .replace(hashtags_str.as_str(), "")
                         .trim()
                         .to_string();
 
-                    let hashtags = HashtagParser::new(&hashtags_str).collect::<Vec<_>>();
+                    let hashtags: Vec<hashtag::Hashtag> =
+                        HashtagParser::new(&hashtags_str).collect::<Vec<hashtag::Hashtag>>();
 
-                    let end = hashtags[hashtags.len() - 1].end;
+                    let end: usize = hashtags[hashtags.len() - 1].end;
 
-                    let mut message = "".to_owned();
+                    let mut message: String = "".to_owned();
                     for s in hashtags_str.char_indices() {
-                        let (i, c) = s;
+                        let (i, c): (usize, char) = s;
                         if i > end {
                             message += c.to_string().as_str();
                         }
                     }
                     message = message.trim().to_string();
-                    // println!("message:{}", message);
 
                     for hashtag in hashtags {
-                        let text = format!("#{}", hashtag.text.to_string().to_owned());
+                        let text: String = format!("#{}", hashtag.text.to_string().to_owned());
                         if map.contains_key(&text) == false {
                             let mut map_hashtag: HashMap<String, String> = HashMap::new();
                             map_hashtag.insert(history.to_string(), message.to_string());
@@ -158,11 +158,12 @@ fn main() {
                                 map_hashtag,
                             );
                         } else {
-                            let map_hashtag = map.get_mut(&text).unwrap();
+                            let map_hashtag: &mut HashMap<String, String> =
+                                map.get_mut(&text).unwrap();
                             if map_hashtag.contains_key(history) == false {
                                 map_hashtag.insert(history.to_string(), message.to_string());
                             }
-                            let map_history = map_hashtag.get_mut(history).unwrap();
+                            let map_history: &mut String = map_hashtag.get_mut(history).unwrap();
                             if message.to_string().len() != 0 {
                                 *map_history = message.to_string();
                             }
@@ -170,7 +171,7 @@ fn main() {
                     }
                 }
             }
-            Err(e) => {}
+            Err(_) => {}
         }
     }
 

@@ -16,15 +16,16 @@ use tui::{
 
 pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
     enable_raw_mode().unwrap();
-    let mut stdout = io::stdout();
+    let mut stdout: std::io::Stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).unwrap();
+    let backend: tui::backend::TermionBackend<std::io::Stdout> = TermionBackend::new(stdout);
+    let mut terminal: tui::Terminal<tui::backend::TermionBackend<std::io::Stdout>> =
+        Terminal::new(backend).unwrap();
 
-    let mut app = App::new(map);
+    let mut app: App = App::new(map);
     // app.next();
     app.state.select(Some(0));
-    let res = run_app(&mut terminal, app);
+    let res: String = run_app(&mut terminal, app);
 
     // restore terminal
     disable_raw_mode().unwrap();
@@ -47,7 +48,7 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
         }
     };
     // write res in script
-    let mut script_file = match std::fs::File::create(script_path) {
+    let mut script_file: std::fs::File = match std::fs::File::create(script_path) {
         Ok(file) => file,
         Err(e) => {
             println!("{}", e);
@@ -73,9 +74,9 @@ struct App {
 
 impl App {
     fn new(history_map: HashMap<String, HashMap<String, String>>) -> App {
-        let mut hashtags = vec![];
+        let mut hashtags: Vec<Vec<String>> = vec![];
         for hashtag in (&history_map).keys() {
-            let item_count = history_map.get(hashtag).unwrap().len();
+            let item_count: usize = history_map.get(hashtag).unwrap().len();
             hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
         }
 
@@ -93,14 +94,16 @@ impl App {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     loop {
-        terminal.draw(|f| ui(f, &mut app)).unwrap();
+        terminal
+            .draw(|f: &mut tui::Frame<B>| ui(f, &mut app))
+            .unwrap();
 
         if let Event::Key(key) = event::read().unwrap() {
-            let key_code = key.code;
+            let key_code: crossterm::event::KeyCode = key.code;
             if key_code == KeyCode::Char('q') {
                 return "".to_owned();
             } else if key_code == KeyCode::Down {
-                let i = match app.state.selected() {
+                let i: usize = match app.state.selected() {
                     Some(i) => {
                         if i >= app.hashtags.len() - 1 {
                             0
@@ -112,7 +115,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 };
                 app.state.select(Some(i));
             } else if key_code == KeyCode::Up {
-                let i = match app.state.selected() {
+                let i: usize = match app.state.selected() {
                     Some(i) => {
                         if i == 0 {
                             app.hashtags.len() - 1
@@ -126,11 +129,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             } else if app.table_title == " Select Hashtag View "
                 && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
             {
-                let selected = app.state.selected().unwrap();
-                let item = &app.hashtags[selected];
-                let history_group = &app.history_map.get(item[0].as_str()).unwrap();
+                let selected: usize = app.state.selected().unwrap();
+                let item: &Vec<String> = &app.hashtags[selected];
+                let history_group: &&HashMap<String, String> =
+                    &app.history_map.get(item[0].as_str()).unwrap();
 
-                let mut hashtags = vec![];
+                let mut hashtags: Vec<Vec<String>> = vec![];
                 for (history, message) in history_group.iter() {
                     hashtags.push(vec![history.to_string(), message.to_string()]);
                 }
@@ -139,13 +143,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 app.state.select(Some(0));
                 app.table_title = " Select Command View ";
             } else if app.table_title == " Select Command View " && key_code == KeyCode::Enter {
-                let selected = app.state.selected().unwrap();
-                let item = &app.hashtags[selected];
+                let selected: usize = app.state.selected().unwrap();
+                let item: &Vec<String> = &app.hashtags[selected];
                 return item[0].to_owned();
             } else if app.table_title == " Select Command View " && key_code == KeyCode::Left {
-                let mut hashtags = vec![];
+                let mut hashtags: Vec<Vec<String>> = vec![];
                 for hashtag in (&app.history_map).keys() {
-                    let item_count = app.history_map.get(hashtag).unwrap().len();
+                    let item_count: usize = app.history_map.get(hashtag).unwrap().len();
                     hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
                 }
                 app.hashtags = hashtags;
@@ -158,33 +162,35 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
-    let rects = Layout::default()
+    let rects: Vec<tui::layout::Rect> = Layout::default()
         .horizontal_margin(3)
         .vertical_margin(3)
         .constraints([Constraint::Percentage(100)].as_ref())
         .split(f.size());
 
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default().bg(Color::Blue);
-    let header_cells = app
+    let selected_style: tui::style::Style = Style::default().add_modifier(Modifier::REVERSED);
+    let normal_style: tui::style::Style = Style::default().bg(Color::Blue);
+    let header_cells: std::iter::Map<std::slice::Iter<&str>, _> = app
         .header_cells
         .iter()
-        .map(|h| Cell::from(&(**h)).style(Style::default().fg(Color::Red)));
-    let header = Row::new(header_cells)
+        .map(|h: &&str| Cell::from(&(**h)).style(Style::default().fg(Color::Red)));
+    let header: tui::widgets::Row = Row::new(header_cells)
         .style(normal_style)
         .height(1)
         .bottom_margin(1);
-    let rows = app.hashtags.iter().map(|item| {
-        let height = item
-            .iter()
-            .map(|content| content.chars().filter(|c| *c == '\n').count())
-            .max()
-            .unwrap_or(0)
-            + 1;
-        let cells = item.iter().map(|content| content.to_string());
-        Row::new(cells).height(height as u16)
-    });
-    let t = Table::new(rows)
+    let rows: std::iter::Map<std::slice::Iter<Vec<String>>, _> =
+        app.hashtags.iter().map(|item: &Vec<String>| {
+            let height: usize = item
+                .iter()
+                .map(|content: &String| content.chars().filter(|c: &char| *c == '\n').count())
+                .max()
+                .unwrap_or(0)
+                + 1;
+            let cells: std::iter::Map<std::slice::Iter<std::string::String>, _> =
+                item.iter().map(|content: &String| content.to_string());
+            Row::new(cells).height(height as u16)
+        });
+    let t: tui::widgets::Table = Table::new(rows)
         .header(header)
         .block(
             Block::default()
