@@ -3,9 +3,15 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use dirs::home_dir;
 use std::collections::HashMap;
-use std::io;
+use std::fs::File;
+use std::io::stdout;
+use std::io::Stdout;
 use std::io::Write;
+use std::iter::Map;
+use std::path::PathBuf;
+use std::slice::Iter;
 use tui::{
     backend::{Backend, TermionBackend},
     layout::{Constraint, Layout},
@@ -14,20 +20,24 @@ use tui::{
     Frame, Terminal,
 };
 
+const SELECT_HASHTAG_HEADER: [&'static str; 2] = ["HashTag", "Item Count"];
+const SELECT_COMMAND_HEADER: [&'static str; 2] = ["Command", "Comment"];
+
+const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
+const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
+
 pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
     enable_raw_mode().unwrap();
-    let mut stdout: std::io::Stdout = io::stdout();
+    let mut stdout: Stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-    let backend: tui::backend::TermionBackend<std::io::Stdout> = TermionBackend::new(stdout);
-    let mut terminal: tui::Terminal<tui::backend::TermionBackend<std::io::Stdout>> =
+    let backend: tui::backend::TermionBackend<Stdout> = TermionBackend::new(stdout);
+    let mut terminal: Terminal<tui::backend::TermionBackend<Stdout>> =
         Terminal::new(backend).unwrap();
 
     let mut app: App = App::new(map);
-    // app.next();
     app.state.select(Some(0));
     let res: String = run_app(&mut terminal, app);
 
-    // restore terminal
     disable_raw_mode().unwrap();
     execute!(
         terminal.backend_mut(),
@@ -37,7 +47,7 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
     .unwrap();
     terminal.show_cursor().unwrap();
 
-    let script_path: std::path::PathBuf = match dirs::home_dir() {
+    let script_path: PathBuf = match home_dir() {
         Some(mut history_file_path) => {
             history_file_path.push(".history-tidy");
             history_file_path.push("script");
@@ -48,7 +58,7 @@ pub fn init_ui(map: HashMap<String, HashMap<String, String>>) {
         }
     };
     // write res in script
-    let mut script_file: std::fs::File = match std::fs::File::create(script_path) {
+    let mut script_file: File = match File::create(script_path) {
         Ok(file) => file,
         Err(e) => {
             println!("{}", e);
@@ -69,7 +79,7 @@ struct App {
     table_title: &'static str,
     hashtags: Vec<Vec<String>>,
     history_map: HashMap<String, HashMap<String, String>>,
-    header_cells: Vec<&'static str>,
+    header_cells: [&'static str; 2],
 }
 
 impl App {
@@ -84,22 +94,20 @@ impl App {
 
         App {
             state: TableState::default(),
-            table_title: " Select Hashtag View ",
+            table_title: SELECT_HASHTAG_TITLE,
             hashtags,
             history_map,
-            header_cells: vec!["HashTag", "Item Count"],
+            header_cells: SELECT_HASHTAG_HEADER,
         }
     }
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     loop {
-        terminal
-            .draw(|f: &mut tui::Frame<B>| ui(f, &mut app))
-            .unwrap();
+        terminal.draw(|f: &mut Frame<B>| ui(f, &mut app)).unwrap();
 
         if let Event::Key(key) = event::read().unwrap() {
-            let key_code: crossterm::event::KeyCode = key.code;
+            let key_code: event::KeyCode = key.code;
             if key_code == KeyCode::Char('q') {
                 return "".to_owned();
             } else if key_code == KeyCode::Down {
@@ -126,7 +134,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     None => 0,
                 };
                 app.state.select(Some(i));
-            } else if app.table_title == " Select Hashtag View "
+            } else if app.table_title == SELECT_HASHTAG_TITLE
                 && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
             {
                 let selected: usize = app.state.selected().unwrap();
@@ -138,24 +146,24 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 for (history, message) in history_group.iter() {
                     hashtags.push(vec![history.to_string(), message.to_string()]);
                 }
-                app.header_cells = vec!["Command", "Comment"];
+                app.header_cells = SELECT_COMMAND_HEADER;
                 app.hashtags = hashtags;
                 app.state.select(Some(0));
-                app.table_title = " Select Command View ";
-            } else if app.table_title == " Select Command View " && key_code == KeyCode::Enter {
+                app.table_title = SELECT_COMMAND_TITLE;
+            } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Enter {
                 let selected: usize = app.state.selected().unwrap();
                 let item: &Vec<String> = &app.hashtags[selected];
                 return item[0].to_owned();
-            } else if app.table_title == " Select Command View " && key_code == KeyCode::Left {
+            } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for hashtag in (&app.history_map).keys() {
                     let item_count: usize = app.history_map.get(hashtag).unwrap().len();
                     hashtags.push(vec![hashtag.to_string(), item_count.to_string()]);
                 }
                 app.hashtags = hashtags;
-                app.header_cells = vec!["HashTag", "Item Count"];
+                app.header_cells = SELECT_HASHTAG_HEADER;
                 app.state.select(Some(0));
-                app.table_title = " Select Hashtag View ";
+                app.table_title = SELECT_HASHTAG_TITLE;
             }
         }
     }
@@ -168,9 +176,9 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .constraints([Constraint::Percentage(100)].as_ref())
         .split(f.size());
 
-    let selected_style: tui::style::Style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style: tui::style::Style = Style::default().bg(Color::Blue);
-    let header_cells: std::iter::Map<std::slice::Iter<&str>, _> = app
+    let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
+    let normal_style: Style = Style::default().bg(Color::Blue);
+    let header_cells: Map<Iter<&str>, _> = app
         .header_cells
         .iter()
         .map(|h: &&str| Cell::from(&(**h)).style(Style::default().fg(Color::Red)));
@@ -178,18 +186,16 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .style(normal_style)
         .height(1)
         .bottom_margin(1);
-    let rows: std::iter::Map<std::slice::Iter<Vec<String>>, _> =
-        app.hashtags.iter().map(|item: &Vec<String>| {
-            let height: usize = item
-                .iter()
-                .map(|content: &String| content.chars().filter(|c: &char| *c == '\n').count())
-                .max()
-                .unwrap_or(0)
-                + 1;
-            let cells: std::iter::Map<std::slice::Iter<std::string::String>, _> =
-                item.iter().map(|content: &String| content.to_string());
-            Row::new(cells).height(height as u16)
-        });
+    let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item: &Vec<String>| {
+        let height: usize = item
+            .iter()
+            .map(|content: &String| content.chars().filter(|c: &char| *c == '\n').count())
+            .max()
+            .unwrap_or(0)
+            + 1;
+        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| content.to_string());
+        Row::new(cells).height(height as u16)
+    });
     let t: tui::widgets::Table = Table::new(rows)
         .header(header)
         .block(

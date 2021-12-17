@@ -1,22 +1,35 @@
+use builder::DefaultBuilder;
+use builder::Newline;
 use clap::{crate_authors, crate_description, crate_version};
-use clap::{Arg, SubCommand};
+use clap::{App, Arg, ArgMatches, SubCommand};
+use conch_parser::ast::builder;
 use conch_parser::lexer::Lexer;
 use conch_parser::parse::DefaultParser;
-use dirs;
+use conch_parser::parse::Parser;
+use dirs::home_dir;
+use hashtag::Hashtag;
+use hashtag::HashtagParser;
 use std::collections::HashMap;
+use std::fs::read_to_string;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::exit;
+use std::str::Chars;
+use ui::init_ui;
+
 mod hashtag;
 mod ui;
-use hashtag::HashtagParser;
-use std::fs;
-use std::io::Write;
 
-// get history vector with duplicates removed
-fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
-    match dirs::home_dir() {
+fn get_tidy_history() -> Result<Vec<String>, Error> {
+    match home_dir() {
         Some(mut history_file_path) => {
             history_file_path.push(".history-tidy");
             history_file_path.push("history");
-            match std::fs::read_to_string(history_file_path) {
+            match read_to_string(history_file_path) {
                 Ok(history_file_content) => {
                     let history_vec: Vec<String> = history_file_content
                         .lines()
@@ -30,16 +43,13 @@ fn get_tidy_history() -> Result<Vec<String>, std::io::Error> {
             }
         }
         None => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Can't get home path",
-            ));
+            return Err(Error::new(ErrorKind::NotFound, "Can't get home path"));
         }
     };
 }
 
 fn main() {
-    let matches: clap::ArgMatches = clap::App::new("history-tidy")
+    let matches: ArgMatches = App::new("history-tidy")
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
@@ -62,11 +72,11 @@ fn main() {
             _ => unreachable!(),
         };
         println!("{}", init_shell_script);
-        std::process::exit(0);
+        exit(0);
     }
 
     if let Some(_) = matches.subcommand_matches("load") {
-        let script_path: std::path::PathBuf = match dirs::home_dir() {
+        let script_path: PathBuf = match home_dir() {
             Some(mut history_file_path) => {
                 history_file_path.push(".history-tidy");
                 history_file_path.push("script");
@@ -76,7 +86,7 @@ fn main() {
                 return;
             }
         };
-        let script_content: String = match std::fs::read_to_string(&script_path) {
+        let script_content: String = match read_to_string(&script_path) {
             Ok(script_content) => script_content,
             Err(e) => {
                 println!("{}", e);
@@ -84,7 +94,7 @@ fn main() {
             }
         };
 
-        let mut script_file: fs::File = match fs::OpenOptions::new()
+        let mut script_file: File = match OpenOptions::new()
             .write(true)
             .truncate(true)
             .open(&script_path)
@@ -104,7 +114,7 @@ fn main() {
             }
         };
         println!("{}", script_content);
-        std::process::exit(0);
+        exit(0);
     }
 
     let mut map: HashMap<String, HashMap<String, String>> = HashMap::new();
@@ -117,15 +127,12 @@ fn main() {
     };
 
     for history in &history_vec {
-        let lexer: conch_parser::lexer::Lexer<std::str::Chars> = Lexer::new(history.chars());
-        let mut parser: conch_parser::parse::Parser<
-            conch_parser::lexer::Lexer<std::str::Chars>,
-            conch_parser::ast::builder::DefaultBuilder<String>,
-        > = DefaultParser::new(lexer);
+        let lexer: Lexer<Chars> = Lexer::new(history.chars());
+        let mut parser: Parser<Lexer<Chars>, DefaultBuilder<String>> = DefaultParser::new(lexer);
 
         match parser.and_or_list() {
             Ok(_) => {
-                let new_line: Vec<conch_parser::ast::builder::Newline> = parser.linebreak();
+                let new_line: Vec<Newline> = parser.linebreak();
                 if new_line.is_empty() {
                 } else {
                     let hashtags_str: String = new_line[0].0.as_ref().unwrap().to_owned();
@@ -134,8 +141,8 @@ fn main() {
                         .trim()
                         .to_string();
 
-                    let hashtags: Vec<hashtag::Hashtag> =
-                        HashtagParser::new(&hashtags_str).collect::<Vec<hashtag::Hashtag>>();
+                    let hashtags: Vec<Hashtag> =
+                        HashtagParser::new(&hashtags_str).collect::<Vec<Hashtag>>();
 
                     let end: usize = hashtags[hashtags.len() - 1].end;
 
@@ -177,6 +184,6 @@ fn main() {
 
     // println!("{:?}", map);
     // println!("{:?}", history_vec);
-    ui::init_ui(map);
-    std::process::exit(0);
+    init_ui(map);
+    exit(0);
 }
