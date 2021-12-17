@@ -66,9 +66,9 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
                     } else {
                         let map_hashtag: &mut LinkedHashMap<String, String> =
                             command_hashmap.get_mut(&text).unwrap();
-                        if map_hashtag.contains_key(history) == false {
-                            map_hashtag.insert(history.to_owned(), "".to_owned());
-                        }
+                        // if map_hashtag.contains_key(history) == false {
+                        map_hashtag.insert(history.to_owned(), "".to_owned());
+                        // }
                     }
                 } else {
                     let hashtags_str: String = new_line[0].0.as_ref().unwrap().to_owned();
@@ -99,13 +99,10 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
                         } else {
                             let map_hashtag: &mut LinkedHashMap<String, String> =
                                 command_hashmap.get_mut(&text).unwrap();
-                            if map_hashtag.contains_key(history) == false {
-                                map_hashtag.insert(history.to_owned(), message.to_owned());
+                            if map_hashtag.contains_key(history) && message.is_empty() {
+                                message = map_hashtag.get_mut(history).unwrap().to_owned();
                             }
-                            let map_history: &mut String = map_hashtag.get_mut(history).unwrap();
-                            if message.to_owned().len() != 0 {
-                                *map_history = message.to_owned();
-                            }
+                            map_hashtag.insert(history.to_owned(), message.to_owned());
                         }
                     }
                 }
