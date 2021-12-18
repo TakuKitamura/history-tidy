@@ -50,26 +50,17 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
 
     let mut command_hashmap: LinkedHashMap<String, LinkedHashMap<String, String>> =
         LinkedHashMap::new();
+    let mut all: LinkedHashMap<String, String> = LinkedHashMap::new();
     for history in &history_vec {
         let lexer: Lexer<Chars> = Lexer::new(history.chars());
         let mut parser: Parser<Lexer<Chars>, DefaultBuilder<String>> = DefaultParser::new(lexer);
+
+        all.insert(history.to_owned(), "".to_owned());
 
         match parser.and_or_list() {
             Ok(_) => {
                 let new_line: Vec<Newline> = parser.linebreak();
                 if new_line.is_empty() {
-                    let text: String = "ALL".to_owned();
-                    if command_hashmap.contains_key(&text) == false {
-                        let mut map_hashtag: LinkedHashMap<String, String> = LinkedHashMap::new();
-                        map_hashtag.insert(history.to_owned(), "".to_owned());
-                        command_hashmap.insert(text, map_hashtag);
-                    } else {
-                        let map_hashtag: &mut LinkedHashMap<String, String> =
-                            command_hashmap.get_mut(&text).unwrap();
-                        // if map_hashtag.contains_key(history) == false {
-                        map_hashtag.insert(history.to_owned(), "".to_owned());
-                        // }
-                    }
                 } else {
                     let hashtags_str: String = new_line[0].0.as_ref().unwrap().to_owned();
                     let history: &String =
@@ -123,5 +114,6 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
             }
         }
     }
+    command_hashmap.insert("ALL".to_owned(), all);
     return command_hashmap;
 }

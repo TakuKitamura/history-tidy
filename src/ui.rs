@@ -138,23 +138,32 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
             {
                 let selected: usize = app.state.selected().unwrap();
-                let item: &Vec<String> = &app.hashtags[selected];
+                let select_hashtag: &Vec<String> = &app.hashtags[selected];
+                // println!("{}", select_hashtag[0]);
                 let history_group: &&LinkedHashMap<String, String> =
-                    &app.history_map.get(item[0].as_str()).unwrap();
+                    &app.history_map.get(select_hashtag[0].as_str()).unwrap();
 
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for (history, message) in history_group.iter() {
-                    hashtags.push(vec![history.to_owned(), message.to_owned()]);
+                    if select_hashtag[0] == "ALL" {
+                        hashtags.push(vec![history.to_owned()]);
+                    } else {
+                        hashtags.push(vec![history.to_owned(), message.to_owned()]);
+                    }
                 }
-                app.header_cells = SELECT_COMMAND_HEADER;
+                if select_hashtag[0] == "ALL" {
+                    app.header_cells = ["Command", ""]
+                } else {
+                    app.header_cells = SELECT_COMMAND_HEADER;
+                }
                 hashtags.reverse();
                 app.hashtags = hashtags;
                 app.state.select(Some(0));
                 app.table_title = SELECT_COMMAND_TITLE;
             } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Enter {
                 let selected: usize = app.state.selected().unwrap();
-                let item: &Vec<String> = &app.hashtags[selected];
-                return item[0].to_owned();
+                let select_command: &Vec<String> = &app.hashtags[selected];
+                return select_command[0].to_owned();
             } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for hashtag in (&app.history_map).keys() {
