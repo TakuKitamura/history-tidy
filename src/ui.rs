@@ -20,9 +20,6 @@ use tui::{
     Frame, Terminal,
 };
 
-const SELECT_HASHTAG_HEADER: [&'static str; 2] = ["HashTag", "Item Count"];
-const SELECT_COMMAND_HEADER: [&'static str; 2] = ["Command", "Comment"];
-
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
 
@@ -79,7 +76,9 @@ struct App {
     table_title: &'static str,
     hashtags: Vec<Vec<String>>,
     history_map: LinkedHashMap<String, LinkedHashMap<String, String>>,
-    header_cells: [&'static str; 2],
+    header_cells: Vec<&'static str>,
+    select_hashtag_header: Vec<&'static str>,
+    select_command_header: Vec<&'static str>,
 }
 
 impl App {
@@ -90,6 +89,9 @@ impl App {
             hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
         }
 
+        let select_hashtag_header: Vec<&'static str> = vec!["HashTag", "Item Count"];
+        let select_command_header: Vec<&'static str> = vec!["Command", "Comment"];
+
         hashtags.sort();
 
         App {
@@ -97,7 +99,9 @@ impl App {
             table_title: SELECT_HASHTAG_TITLE,
             hashtags,
             history_map,
-            header_cells: SELECT_HASHTAG_HEADER,
+            header_cells: select_hashtag_header.to_owned(),
+            select_hashtag_header: select_hashtag_header.to_owned(),
+            select_command_header: select_command_header.to_owned(),
         }
     }
 }
@@ -152,9 +156,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     }
                 }
                 if select_hashtag[0] == "ALL" {
-                    app.header_cells = ["Command", ""]
+                    app.header_cells = vec!["Command"]
                 } else {
-                    app.header_cells = SELECT_COMMAND_HEADER;
+                    app.header_cells = app.select_command_header.to_owned();
                 }
                 hashtags.reverse();
                 app.hashtags = hashtags;
@@ -172,7 +176,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 }
                 hashtags.sort();
                 app.hashtags = hashtags;
-                app.header_cells = SELECT_HASHTAG_HEADER;
+                app.header_cells = app.select_hashtag_header.to_owned();
                 app.state.select(Some(0));
                 app.table_title = SELECT_HASHTAG_TITLE;
             }
@@ -180,12 +184,45 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     }
 }
 
+fn generate_wrapped_text(text: String, limit: u32, sepalate: &str) -> String {
+    let mut chars: Vec<&str> = text.split("").collect();
+    chars.remove(0);
+    chars.remove(chars.len() - 1);
+    let mut converted_chars: Vec<String> = vec![];
+
+    let mut width_count: u32 = 0;
+    while chars.len() > 0 && limit >= 2 {
+        let c: &str = &chars[0];
+        if c.bytes().len() == 1 {
+            width_count += 1;
+        } else {
+            width_count += 2;
+        }
+
+        if width_count == limit + 1 {
+            converted_chars.push(sepalate.to_owned());
+            width_count = 0;
+        } else {
+            converted_chars.push(c.to_owned());
+            if width_count > limit - 1 && chars.len() > 1 {
+                converted_chars.push(sepalate.to_owned());
+                width_count = 0;
+            }
+            chars.remove(0);
+        }
+    }
+    return converted_chars.join("");
+}
+
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+    let fsize: tui::layout::Rect = f.size();
+    let rects_margin: u16 = 2;
+    let highlight_symbol: &str = "> ";
     let rects: Vec<tui::layout::Rect> = Layout::default()
-        .horizontal_margin(3)
-        .vertical_margin(3)
+        .horizontal_margin(rects_margin)
+        .vertical_margin(rects_margin)
         .constraints([Constraint::Percentage(100)].as_ref())
-        .split(f.size());
+        .split(fsize);
 
     let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
     let normal_style: Style = Style::default().bg(Color::Blue);
@@ -198,15 +235,29 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .height(1)
         .bottom_margin(1);
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item: &Vec<String>| {
-        let height: usize = item
-            .iter()
-            .map(|content: &String| content.chars().filter(|c: &char| *c == '\n').count())
-            .max()
-            .unwrap_or(0)
-            + 1;
-        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| content.to_owned());
-        Row::new(cells).height(height as u16)
+        let mut height_count: u16 = 1;
+        let border_on: u32 = 2;
+        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
+            let converted_string = generate_wrapped_text(
+                content.to_owned(),
+                fsize.width as u32
+                    - border_on
+                    - (highlight_symbol.len() as u32)
+                    - (rects_margin * 2) as u32,
+                "\n",
+            );
+            height_count = converted_string.matches("\n").count() as u16 + 1;
+            return converted_string;
+        });
+
+        Row::new(cells).height(height_count as u16)
     });
+    let header_cells_count: u16 = 100 / (app.header_cells.len() as u16);
+    let widths: &[tui::layout::Constraint; 3] = &[
+        Constraint::Percentage(header_cells_count),
+        Constraint::Length(30),
+        Constraint::Min(10),
+    ];
     let t: tui::widgets::Table = Table::new(rows)
         .header(header)
         .block(
@@ -215,11 +266,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                 .title(app.table_title),
         )
         .highlight_style(selected_style)
-        .highlight_symbol("> ")
-        .widths(&[
-            Constraint::Percentage(50),
-            Constraint::Length(30),
-            Constraint::Min(10),
-        ]);
+        .highlight_symbol(highlight_symbol)
+        .widths(widths);
     f.render_stateful_widget(t, rects[0], &mut app.state);
 }
