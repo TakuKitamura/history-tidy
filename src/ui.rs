@@ -12,6 +12,8 @@ use std::io::Write;
 use std::iter::Map;
 use std::path::PathBuf;
 use std::slice::Iter;
+use textwrap::word_splitters::NoHyphenation;
+use textwrap::Options;
 use tui::{
     backend::{Backend, TermionBackend},
     layout::{Constraint, Layout},
@@ -19,7 +21,6 @@ use tui::{
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame, Terminal,
 };
-use unicode_width::UnicodeWidthStr;
 
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
@@ -185,29 +186,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     }
 }
 
-fn generate_wrapped_text(text: String, limit: u32, sepalate: &str) -> String {
-    let mut chars: Vec<&str> = text.split("").collect();
-    chars.remove(0);
-    chars.remove(chars.len() - 1);
-    let mut converted_chars: Vec<String> = vec![];
-
-    let mut width_count: u32 = 0;
-    while chars.len() > 0 && limit >= 2 {
-        let c: &str = &chars[0];
-        width_count += UnicodeWidthStr::width(c) as u32;
-        if width_count == limit + 1 {
-            converted_chars.push(sepalate.to_owned());
-            width_count = 0;
-        } else {
-            converted_chars.push(c.to_owned());
-            if width_count > limit - 1 && chars.len() > 1 {
-                converted_chars.push(sepalate.to_owned());
-                width_count = 0;
-            }
-            chars.remove(0);
-        }
-    }
-    return converted_chars.join("");
+fn generate_wrapped_text(text: String, limit: u32) -> String {
+    let options = Options::new(limit as usize).word_splitter(NoHyphenation);
+    return textwrap::fill(text.as_str(), &options);
 }
 
 fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
@@ -241,7 +222,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             let mut height_count: u16 = 1;
 
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
-                let converted_string = generate_wrapped_text(content.to_owned(), text_width, "\n");
+                let converted_string = generate_wrapped_text(content.to_owned(), text_width);
                 height_count = converted_string.matches("\n").count() as u16 + 1;
                 return converted_string;
             });
@@ -250,8 +231,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         } else {
             let mut height_count: u16 = 1;
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
-                let converted_string =
-                    generate_wrapped_text(content.to_owned(), text_width / 2, "\n");
+                let converted_string = generate_wrapped_text(content.to_owned(), text_width / 2);
 
                 let tmp_height_count = converted_string.matches("\n").count() as u16 + 1;
                 if tmp_height_count > height_count {
