@@ -19,6 +19,7 @@ use tui::{
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame, Terminal,
 };
+use unicode_width::UnicodeWidthStr;
 
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
@@ -193,12 +194,7 @@ fn generate_wrapped_text(text: String, limit: u32, sepalate: &str) -> String {
     let mut width_count: u32 = 0;
     while chars.len() > 0 && limit >= 2 {
         let c: &str = &chars[0];
-        if c.bytes().len() == 1 {
-            width_count += 1;
-        } else {
-            width_count += 2;
-        }
-
+        width_count += UnicodeWidthStr::width(c) as u32;
         if width_count == limit + 1 {
             converted_chars.push(sepalate.to_owned());
             width_count = 0;
@@ -234,23 +230,40 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .style(normal_style)
         .height(1)
         .bottom_margin(1);
-    let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item: &Vec<String>| {
-        let mut height_count: u16 = 1;
-        let border_on: u32 = 2;
-        let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
-            let converted_string = generate_wrapped_text(
-                content.to_owned(),
-                fsize.width as u32
-                    - border_on
-                    - (highlight_symbol.len() as u32)
-                    - (rects_margin * 2) as u32,
-                "\n",
-            );
-            height_count = converted_string.matches("\n").count() as u16 + 1;
-            return converted_string;
-        });
 
-        Row::new(cells).height(height_count as u16)
+    let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
+        let border_margin: u32 = 2;
+        let text_width = fsize.width as u32
+            - border_margin
+            - (highlight_symbol.len() as u32)
+            - (rects_margin * 2) as u32;
+        if app.header_cells[0] == app.select_command_header[0] {
+            let mut height_count: u16 = 1;
+
+            let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
+                let converted_string = generate_wrapped_text(content.to_owned(), text_width, "\n");
+                height_count = converted_string.matches("\n").count() as u16 + 1;
+                return converted_string;
+            });
+
+            return Row::new(cells).height(height_count as u16);
+        } else {
+            let mut height_count: u16 = 1;
+            let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
+                let converted_string =
+                    generate_wrapped_text(content.to_owned(), text_width / 2, "\n");
+
+                let tmp_height_count = converted_string.matches("\n").count() as u16 + 1;
+                if tmp_height_count > height_count {
+                    height_count = tmp_height_count;
+                }
+                // height_count =
+
+                return converted_string;
+            });
+
+            return Row::new(cells).height(height_count as u16);
+        };
     });
     let header_cells_count: u16 = 100 / (app.header_cells.len() as u16);
     let widths: &[tui::layout::Constraint; 3] = &[
