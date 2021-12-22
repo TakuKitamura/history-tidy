@@ -24,6 +24,9 @@ use tui::{
 
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
+const HASHTAG_VIEW_ID: u8 = 1;
+const ALL_COMMAND_VIEW_ID: u8 = 2;
+const HASHTAG_COMMAND_VIEW_ID: u8 = 3;
 
 pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
     enable_raw_mode().unwrap();
@@ -80,21 +83,27 @@ struct App {
     history_map: LinkedHashMap<String, LinkedHashMap<String, String>>,
     header_cells: Vec<&'static str>,
     select_hashtag_header: Vec<&'static str>,
-    select_command_header: Vec<&'static str>,
+    view_id: u8,
 }
 
 impl App {
     fn new(history_map: LinkedHashMap<String, LinkedHashMap<String, String>>) -> App {
         let mut hashtags: Vec<Vec<String>> = vec![];
+        let mut all_hashtag: Vec<String> = vec![];
         for hashtag in (&history_map).keys() {
             let item_count: usize = history_map.get(hashtag).unwrap().len();
-            hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
+
+            if hashtag == "ALL" {
+                all_hashtag = vec![hashtag.to_owned(), item_count.to_string()];
+            } else {
+                hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
+            }
         }
 
-        let select_hashtag_header: Vec<&'static str> = vec!["HashTag", "Item Count"];
-        let select_command_header: Vec<&'static str> = vec!["Command", "Comment"];
-
         hashtags.sort();
+        hashtags.insert(0, all_hashtag);
+
+        let select_hashtag_header: Vec<&'static str> = vec!["HashTag", "Count"];
 
         App {
             state: TableState::default(),
@@ -103,7 +112,7 @@ impl App {
             history_map,
             header_cells: select_hashtag_header.to_owned(),
             select_hashtag_header: select_hashtag_header.to_owned(),
-            select_command_header: select_command_header.to_owned(),
+            view_id: HASHTAG_VIEW_ID,
         }
     }
 }
@@ -154,13 +163,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     if select_hashtag[0] == "ALL" {
                         hashtags.push(vec![history.to_owned()]);
                     } else {
-                        hashtags.push(vec![history.to_owned(), message.to_owned()]);
+                        // hashtags.push(vec![history.to_owned(), message.to_owned()]);
+                        hashtags.push(vec![history.to_owned() + " # " + &message.to_owned()]);
                     }
                 }
                 if select_hashtag[0] == "ALL" {
-                    app.header_cells = vec!["Command"]
+                    app.header_cells = vec!["Command"];
+                    app.view_id = ALL_COMMAND_VIEW_ID;
                 } else {
-                    app.header_cells = app.select_command_header.to_owned();
+                    // app.header_cells = app.select_command_header.to_owned();
+                    app.header_cells = vec!["Command"];
+                    app.view_id = HASHTAG_COMMAND_VIEW_ID;
                 }
                 hashtags.reverse();
                 app.hashtags = hashtags;
@@ -172,15 +185,26 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 return select_command[0].to_owned();
             } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
                 let mut hashtags: Vec<Vec<String>> = vec![];
+                let mut all_hashtag: Vec<String> = vec![];
                 for hashtag in (&app.history_map).keys() {
                     let item_count: usize = app.history_map.get(hashtag).unwrap().len();
-                    hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
+
+                    if hashtag == "ALL" {
+                        all_hashtag = vec![hashtag.to_owned(), item_count.to_string()];
+                    } else {
+                        hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
+                    }
                 }
+
                 hashtags.sort();
+                hashtags.insert(0, all_hashtag);
+
+                // hashtags.sort();
                 app.hashtags = hashtags;
                 app.header_cells = app.select_hashtag_header.to_owned();
                 app.state.select(Some(0));
                 app.table_title = SELECT_HASHTAG_TITLE;
+                app.view_id = HASHTAG_VIEW_ID;
             }
         }
     }
@@ -218,7 +242,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             - border_margin
             - (highlight_symbol.len() as u32)
             - (rects_margin * 2) as u32;
-        if app.header_cells[0] == app.select_command_header[0] {
+        if app.view_id == ALL_COMMAND_VIEW_ID || app.view_id == HASHTAG_COMMAND_VIEW_ID {
+            // one line
             let mut height_count: u16 = 1;
 
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
@@ -229,6 +254,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
             return Row::new(cells).height(height_count as u16);
         } else {
+            // two line
             let mut height_count: u16 = 1;
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let converted_string = generate_wrapped_text(content.to_owned(), text_width / 2);

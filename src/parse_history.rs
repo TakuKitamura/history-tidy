@@ -99,18 +99,18 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
                 }
             }
             Err(_) => {
-                let text: String = "ERR".to_owned();
-                if command_hashmap.contains_key(&text) == false {
-                    let mut map_hashtag: LinkedHashMap<String, String> = LinkedHashMap::new();
-                    map_hashtag.insert(history.to_owned(), "".to_owned());
-                    command_hashmap.insert(text, map_hashtag);
-                } else {
-                    let map_hashtag: &mut LinkedHashMap<String, String> =
-                        command_hashmap.get_mut(&text).unwrap();
-                    if map_hashtag.contains_key(history) == false {
-                        map_hashtag.insert(history.to_owned(), "".to_owned());
-                    }
-                }
+                // let text: String = "ERR".to_owned();
+                // if command_hashmap.contains_key(&text) == false {
+                //     let mut map_hashtag: LinkedHashMap<String, String> = LinkedHashMap::new();
+                //     map_hashtag.insert(history.to_owned(), "".to_owned());
+                //     command_hashmap.insert(text, map_hashtag);
+                // } else {
+                //     let map_hashtag: &mut LinkedHashMap<String, String> =
+                //         command_hashmap.get_mut(&text).unwrap();
+                //     if map_hashtag.contains_key(history) == false {
+                //         map_hashtag.insert(history.to_owned(), "".to_owned());
+                //     }
+                // }
             }
         }
     }
