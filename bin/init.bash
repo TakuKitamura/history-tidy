@@ -1,17 +1,54 @@
 #!/bin/bash
-history_tidy_dict_path="$HOME/.history-tidy"
+history_tidy_prompt () {
+    local history_tidy_dict_path="$HOME/.history-tidy"
 
-if [ ! -d "$history_tidy_dict_path" ]; then
-  mkdir "$history_tidy_dict_path"
-fi
+    if [ ! -d "$history_tidy_dict_path" ]; then
+        mkdir "$history_tidy_dict_path"
+    fi
 
-history_path="$history_tidy_dict_path/history"
-history_tidy_prompt="history -a $history_path; history -cr $history_path; eval \$(/Users/kitamurataku/local/history-tidy/target/debug/history-tidy load)"
+    local history_path="$history_tidy_dict_path/history"
+    history -a $history_path;
+    history -cr $history_path;
+    local exec_command=$(/Users/kitamurataku/local/history-tidy/target/debug/history-tidy load);
+
+    if [ -z "$exec_command" ]
+    then
+        history_tidy_status=0
+        return 0;
+    fi
+
+    while :
+    do
+        echo $exec_command
+        read -p "Do you exec this command? [Y/n] " choice
+        case "$choice" in
+            [Yy])
+                eval $exec_command;
+                history_tidy_status=$?
+                return $?;
+                ;;
+            [Nn])
+                echo Abort.
+                history_tidy_status=$?
+                return 1;
+                ;;
+            *)
+                if [ -z "$choice" ]
+                then
+                    eval $exec_command;
+                    history_tidy_status=$?
+                    return $?;
+                fi
+                ;;
+        esac
+    done
+}
+
 if [ -z "$PROMPT_COMMAND" ]
     then
         # not already set
-        PROMPT_COMMAND="${history_tidy_prompt}"
+        PROMPT_COMMAND="history_tidy_prompt;"
     else
         # already set
-        PROMPT_COMMAND="${history_tidy_prompt};${PROMPT_COMMAND#;}"
+        PROMPT_COMMAND="history_tidy_prompt;${PROMPT_COMMAND#;}"
 fi
