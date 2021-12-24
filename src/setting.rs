@@ -1,5 +1,3 @@
-// mod hashtag;
-
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, Arg, ArgMatches, SubCommand};
 use std::process::exit;
