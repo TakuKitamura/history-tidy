@@ -208,15 +208,15 @@ fn generate_wrapped_text(text: String, limit: u32) -> String {
     return textwrap::fill(text.as_str(), &options);
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
-    let fsize: tui::layout::Rect = f.size();
-    let rects_margin: u16 = 2;
+fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
+    let frame_size: tui::layout::Rect = frame.size();
+    let reacts_margin: u16 = 2;
     let highlight_symbol: &str = "> ";
-    let rects: Vec<tui::layout::Rect> = Layout::default()
-        .horizontal_margin(rects_margin)
-        .vertical_margin(rects_margin)
+    let reacts: Vec<tui::layout::Rect> = Layout::default()
+        .horizontal_margin(reacts_margin)
+        .vertical_margin(reacts_margin)
         .constraints([Constraint::Percentage(100)].as_ref())
-        .split(fsize);
+        .split(frame_size);
 
     let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
     let normal_style: Style = Style::default().bg(Color::Blue);
@@ -231,14 +231,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
         let border_margin: u32 = 2;
-        let text_width = fsize.width as u32
+        let text_width = frame_size.width as u32
             - border_margin
             - (highlight_symbol.len() as u32)
-            - (rects_margin * 2) as u32;
+            - (reacts_margin * 2) as u32;
+        let mut height_count: u16 = 1;
         if app.view_id == ALL_COMMAND_VIEW_ID || app.view_id == HASHTAG_COMMAND_VIEW_ID {
             // one line
-            let mut height_count: u16 = 1;
-
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let converted_string = generate_wrapped_text(content.to_owned(), text_width);
                 height_count = converted_string.matches("\n").count() as u16 + 1;
@@ -248,7 +247,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             return Row::new(cells).height(height_count as u16);
         } else {
             // two line
-            let mut height_count: u16 = 1;
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let converted_string = generate_wrapped_text(content.to_owned(), text_width / 2);
 
@@ -269,7 +267,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         Constraint::Length(30),
         Constraint::Min(10),
     ];
-    let t: tui::widgets::Table = Table::new(rows)
+    let table: tui::widgets::Table = Table::new(rows)
         .header(header)
         .block(
             Block::default()
@@ -279,5 +277,5 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .highlight_style(selected_style)
         .highlight_symbol(highlight_symbol)
         .widths(widths);
-    f.render_stateful_widget(t, rects[0], &mut app.state);
+    frame.render_stateful_widget(table, reacts[0], &mut app.state);
 }
