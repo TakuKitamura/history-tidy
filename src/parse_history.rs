@@ -52,6 +52,9 @@ pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, Stri
         LinkedHashMap::new();
     let mut all: LinkedHashMap<String, String> = LinkedHashMap::new();
     for history in &history_vec {
+        if history.len() == 0 {
+            continue;
+        }
         let lexer: Lexer<Chars> = Lexer::new(history.chars());
         let mut parser: Parser<Lexer<Chars>, DefaultBuilder<String>> = DefaultParser::new(lexer);
 

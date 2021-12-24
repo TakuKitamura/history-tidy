@@ -17,8 +17,8 @@ use textwrap::Options;
 use tui::{
     backend::{Backend, TermionBackend},
     layout::{Constraint, Layout},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, TableState},
+    style::{Modifier, Style},
+    widgets::{Cell, Row, Table, TableState},
     Frame, Terminal,
 };
 
@@ -210,36 +210,32 @@ fn generate_wrapped_text(text: String, limit: u32) -> String {
 
 fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let frame_size: tui::layout::Rect = frame.size();
-    let reacts_margin: u16 = 2;
     let highlight_symbol: &str = "> ";
     let reacts: Vec<tui::layout::Rect> = Layout::default()
-        .horizontal_margin(reacts_margin)
-        .vertical_margin(reacts_margin)
         .constraints([Constraint::Percentage(100)].as_ref())
         .split(frame_size);
-
-    let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style: Style = Style::default().bg(Color::Blue);
-    let header_cells: Map<Iter<&str>, _> = app
-        .header_cells
-        .iter()
-        .map(|h: &&str| Cell::from(&(**h)).style(Style::default().fg(Color::Red)));
-    let header: tui::widgets::Row = Row::new(header_cells)
-        .style(normal_style)
-        .height(1)
-        .bottom_margin(1);
+    let normal_style: Style = Style::default()
+        .add_modifier(Modifier::UNDERLINED)
+        .add_modifier(Modifier::BOLD);
+    let header_cells: Map<Iter<&str>, _> =
+        app.header_cells.iter().map(|h: &&str| Cell::from(&(**h)));
+    let header: tui::widgets::Row = Row::new(header_cells).height(1).style(normal_style);
 
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
-        let border_margin: u32 = 2;
-        let text_width = frame_size.width as u32
-            - border_margin
-            - (highlight_symbol.len() as u32)
-            - (reacts_margin * 2) as u32;
+        let text_margin: u32 = highlight_symbol.len() as u32;
+
+        let text_width: u32 = if frame_size.width as u32 >= text_margin {
+            frame_size.width as u32 - text_margin
+        } else {
+            frame_size.width as u32
+        };
+
         let mut height_count: u16 = 1;
         if app.view_id == ALL_COMMAND_VIEW_ID || app.view_id == HASHTAG_COMMAND_VIEW_ID {
             // one line
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
-                let converted_string = generate_wrapped_text(content.to_owned(), text_width);
+                let content: String = "$ ".to_owned() + content.as_str();
+                let converted_string = generate_wrapped_text(content, text_width);
                 height_count = converted_string.matches("\n").count() as u16 + 1;
                 return converted_string;
             });
@@ -267,13 +263,9 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         Constraint::Length(30),
         Constraint::Min(10),
     ];
+    let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
     let table: tui::widgets::Table = Table::new(rows)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(app.table_title),
-        )
         .highlight_style(selected_style)
         .highlight_symbol(highlight_symbol)
         .widths(widths);
