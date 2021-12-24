@@ -15,7 +15,7 @@ use conch_parser::parse::Parser;
 use linked_hash_map::LinkedHashMap;
 use std::str::Chars;
 
-fn get_tidy_history() -> Result<Vec<String>, Error> {
+pub fn get_tidy_history() -> Result<Vec<String>, Error> {
     match home_dir() {
         Some(mut history_file_path) => {
             history_file_path.push(".history-tidy");
@@ -39,15 +39,9 @@ fn get_tidy_history() -> Result<Vec<String>, Error> {
     };
 }
 
-pub fn get_command_hashmap() -> LinkedHashMap<String, LinkedHashMap<String, String>> {
-    let history_vec: Vec<String> = match get_tidy_history() {
-        Ok(history_vec) => history_vec,
-        Err(e) => {
-            println!("{}", e);
-            vec![]
-        }
-    };
-
+pub fn get_command_hashmap(
+    history_vec: Vec<String>,
+) -> LinkedHashMap<String, LinkedHashMap<String, String>> {
     let mut command_hashmap: LinkedHashMap<String, LinkedHashMap<String, String>> =
         LinkedHashMap::new();
     let mut all: LinkedHashMap<String, String> = LinkedHashMap::new();
