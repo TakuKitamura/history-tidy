@@ -28,6 +28,12 @@ const HASHTAG_VIEW_ID: u8 = 1;
 const ALL_COMMAND_VIEW_ID: u8 = 2;
 const HASHTAG_COMMAND_VIEW_ID: u8 = 3;
 
+const HASHTAG_LABEL: &'static str = "HashTag";
+const COUNT_LABEL: &'static str = "Count";
+const COMMAND_LABEL: &'static str = "Command";
+
+const ALL_HASHTAG: &'static str = "ALL";
+
 pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
     enable_raw_mode().unwrap();
     let mut stdout: Stdout = stdout();
@@ -80,6 +86,7 @@ struct App {
     state: TableState,
     table_title: &'static str,
     hashtags: Vec<Vec<String>>,
+    hashtags_memo: Vec<Vec<String>>,
     history_map: LinkedHashMap<String, LinkedHashMap<String, String>>,
     header_cells: Vec<&'static str>,
     select_hashtag_header: Vec<&'static str>,
@@ -92,8 +99,7 @@ impl App {
         let mut all_hashtag: Vec<String> = vec![];
         for hashtag in (&history_map).keys() {
             let item_count: usize = history_map.get(hashtag).unwrap().len();
-
-            if hashtag == "ALL" {
+            if hashtag == ALL_HASHTAG {
                 all_hashtag = vec![hashtag.to_owned(), item_count.to_string()];
             } else {
                 hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
@@ -103,12 +109,15 @@ impl App {
         hashtags.sort();
         hashtags.insert(0, all_hashtag);
 
-        let select_hashtag_header: Vec<&'static str> = vec!["HashTag", "Count"];
+        let hashtags_memo: Vec<Vec<String>> = hashtags.clone();
+
+        let select_hashtag_header: Vec<&'static str> = vec![HASHTAG_LABEL, COUNT_LABEL];
 
         App {
             state: TableState::default(),
             table_title: SELECT_HASHTAG_TITLE,
             hashtags,
+            hashtags_memo: hashtags_memo,
             history_map,
             header_cells: select_hashtag_header.to_owned(),
             select_hashtag_header: select_hashtag_header.to_owned(),
@@ -154,25 +163,25 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             {
                 let selected: usize = app.state.selected().unwrap();
                 let select_hashtag: &Vec<String> = &app.hashtags[selected];
-                // println!("{}", select_hashtag[0]);
                 let history_group: &&LinkedHashMap<String, String> =
                     &app.history_map.get(select_hashtag[0].as_str()).unwrap();
 
                 let mut hashtags: Vec<Vec<String>> = vec![];
                 for (history, message) in history_group.iter() {
-                    if select_hashtag[0] == "ALL" {
+                    if select_hashtag[0] == ALL_HASHTAG {
                         hashtags.push(vec![history.to_owned()]);
                     } else {
-                        // hashtags.push(vec![history.to_owned(), message.to_owned()]);
-                        hashtags.push(vec![history.to_owned() + " # " + &message.to_owned()]);
+                        if message.len() > 0 {
+                            hashtags.push(vec![history.to_owned() + " # " + &message.to_owned()]);
+                        } else {
+                            hashtags.push(vec![history.to_owned()]);
+                        }
                     }
                 }
-                if select_hashtag[0] == "ALL" {
-                    app.header_cells = vec!["Command"];
+                app.header_cells = vec![COMMAND_LABEL];
+                if select_hashtag[0] == ALL_HASHTAG {
                     app.view_id = ALL_COMMAND_VIEW_ID;
                 } else {
-                    // app.header_cells = app.select_command_header.to_owned();
-                    app.header_cells = vec!["Command"];
                     app.view_id = HASHTAG_COMMAND_VIEW_ID;
                 }
                 hashtags.reverse();
@@ -184,23 +193,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                 let select_command: &Vec<String> = &app.hashtags[selected];
                 return select_command[0].to_owned();
             } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
-                let mut hashtags: Vec<Vec<String>> = vec![];
-                let mut all_hashtag: Vec<String> = vec![];
-                for hashtag in (&app.history_map).keys() {
-                    let item_count: usize = app.history_map.get(hashtag).unwrap().len();
-
-                    if hashtag == "ALL" {
-                        all_hashtag = vec![hashtag.to_owned(), item_count.to_string()];
-                    } else {
-                        hashtags.push(vec![hashtag.to_owned(), item_count.to_string()]);
-                    }
-                }
-
-                hashtags.sort();
-                hashtags.insert(0, all_hashtag);
-
-                // hashtags.sort();
-                app.hashtags = hashtags;
+                app.hashtags = app.hashtags_memo.clone();
                 app.header_cells = app.select_hashtag_header.to_owned();
                 app.state.select(Some(0));
                 app.table_title = SELECT_HASHTAG_TITLE;
@@ -263,7 +256,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
                 if tmp_height_count > height_count {
                     height_count = tmp_height_count;
                 }
-                // height_count =
 
                 return converted_string;
             });
