@@ -9,13 +9,15 @@ history_tidy_prompt () {
     local history_path="$history_tidy_dict_path/history"
     history -a $history_path;
     history -cr $history_path;
-    local exec_command=$(/Users/kitamurataku/local/history-tidy/target/debug/history-tidy load);
+    local exec_command=$(cat $history_tidy_dict_path/script);
 
     if [ -z "$exec_command" ]
     then
         history_tidy_status=0
         return 0;
     fi
+    
+    echo > $history_tidy_dict_path/script
 
     while :
     do
