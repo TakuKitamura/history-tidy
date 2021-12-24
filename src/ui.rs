@@ -1,5 +1,5 @@
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -37,7 +37,7 @@ const ALL_HASHTAG: &'static str = "ALL";
 pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
     enable_raw_mode().unwrap();
     let mut stdout: Stdout = stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+    execute!(stdout, EnterAlternateScreen).unwrap();
     let backend: tui::backend::TermionBackend<Stdout> = TermionBackend::new(stdout);
     let mut terminal: Terminal<tui::backend::TermionBackend<Stdout>> =
         Terminal::new(backend).unwrap();
@@ -47,12 +47,7 @@ pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
     let res: String = run_app(&mut terminal, app);
 
     disable_raw_mode().unwrap();
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )
-    .unwrap();
+    execute!(terminal.backend_mut(), LeaveAlternateScreen).unwrap();
     terminal.show_cursor().unwrap();
 
     let script_path: PathBuf = match home_dir() {
