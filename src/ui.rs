@@ -29,10 +29,6 @@ const HASHTAG_VIEW_ID: u8 = 1;
 const ALL_COMMAND_VIEW_ID: u8 = 2;
 const HASHTAG_COMMAND_VIEW_ID: u8 = 3;
 
-const HASHTAG_LABEL: &'static str = "HashTag";
-const COUNT_LABEL: &'static str = "Count";
-const COMMAND_LABEL: &'static str = "Command";
-
 const ALL_HASHTAG: &'static str = "ALL";
 
 pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
