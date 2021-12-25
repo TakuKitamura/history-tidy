@@ -84,8 +84,8 @@ struct App {
     hashtags: Vec<Vec<String>>,
     hashtags_memo: Vec<Vec<String>>,
     history_map: LinkedHashMap<String, Vec<String>>,
-    header_cells: Vec<&'static str>,
-    select_hashtag_header: Vec<&'static str>,
+    header_cells: Vec<String>,
+    select_hashtag_header: Vec<String>,
     view_id: u8,
 }
 
@@ -107,7 +107,7 @@ impl App {
 
         let hashtags_memo: Vec<Vec<String>> = hashtags.clone();
 
-        let select_hashtag_header: Vec<&'static str> = vec![HASHTAG_LABEL, COUNT_LABEL];
+        let select_hashtag_header: Vec<String> = vec!["HashTag".to_owned(), "Count".to_owned()];
 
         App {
             state: TableState::default(),
@@ -170,7 +170,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                         hashtags.push(vec![history.to_owned()]);
                     }
                 }
-                app.header_cells = vec![COMMAND_LABEL];
+
+                app.header_cells = vec![select_hashtag[0].clone()];
                 if select_hashtag[0] == ALL_HASHTAG {
                     app.view_id = ALL_COMMAND_VIEW_ID;
                 } else {
@@ -206,8 +207,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let normal_style: Style = Style::default()
         .add_modifier(Modifier::UNDERLINED)
         .add_modifier(Modifier::BOLD);
-    let header_cells: Map<Iter<&str>, _> =
-        app.header_cells.iter().map(|h: &&str| Cell::from(&(**h)));
+    let header_cells: Map<Iter<String>, _> = app.header_cells.iter().map(|h| Cell::from(&(**h)));
     let header: tui::widgets::Row = Row::new(header_cells).height(1).style(normal_style);
 
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
