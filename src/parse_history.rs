@@ -66,16 +66,19 @@ pub fn get_command_hashmap(
                     let hashtags: Vec<Hashtag> =
                         HashtagParser::new(&hashtags_str).collect::<Vec<Hashtag>>();
 
-                    let end: usize = hashtags[hashtags.len() - 1].end;
-
                     let mut message: String = "".to_owned();
-                    for s in hashtags_str.char_indices() {
-                        let (i, c): (usize, char) = s;
-                        if i > end {
-                            message += c.to_string().as_str();
+
+                    if hashtags.len() > 0 {
+                        let end: usize = hashtags[hashtags.len() - 1].end;
+
+                        for s in hashtags_str.char_indices() {
+                            let (i, c): (usize, char) = s;
+                            if i > end {
+                                message += c.to_string().as_str();
+                            }
                         }
+                        message = message.trim().to_owned();
                     }
-                    message = message.trim().to_owned();
 
                     for hashtag in hashtags {
                         let text: String = format!("#{}", hashtag.text.to_owned().to_owned());
@@ -113,4 +116,47 @@ pub fn get_command_hashmap(
     }
     command_hashmap.insert("ALL".to_owned(), all);
     return command_hashmap;
+}
+
+#[cfg(test)]
+fn test_get_tidy_history() {
+    let history_vec: Vec<String> = get_tidy_history().unwrap();
+    assert_eq!(history_vec.len(), 0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_tidy_history_test() {
+        let history: Vec<String> = vec!["ls -a", "pwd #hoge", "cd ~ #hoge #fuga", "ls -a"]
+            .iter()
+            .map(|s: &&str| s.to_string())
+            .collect();
+        let command_hashmap = get_command_hashmap(history);
+
+        let expected_command_hashmap = vec![
+            ("#hoge", vec![("pwd", ""), ("cd ~", "")]),
+            ("#fuga", vec![("cd ~", "")]),
+            (
+                "ALL",
+                vec![("pwd #hoge", ""), ("cd ~ #hoge #fuga", ""), ("ls -a", "")],
+            ),
+        ]
+        .into_iter()
+        .map(|(k1, v1)| {
+            (
+                k1.to_owned(),
+                v1.into_iter()
+                    .map(|(k2, v2)| (k2.to_owned(), v2.to_owned()))
+                    .collect::<Vec<(String, String)>>()
+                    .into_iter()
+                    .collect::<LinkedHashMap<String, String>>(),
+            )
+        })
+        .collect::<LinkedHashMap<String, LinkedHashMap<String, String>>>();
+
+        assert_eq!(command_hashmap, expected_command_hashmap);
+    }
 }
