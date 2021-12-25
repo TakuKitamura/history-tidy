@@ -16,9 +16,10 @@ use textwrap::word_splitters::NoHyphenation;
 use textwrap::Options;
 use tui::{
     backend::{Backend, TermionBackend},
-    layout::{Constraint, Layout},
-    style::{Modifier, Style},
-    widgets::{Cell, Row, Table, TableState},
+    layout::{Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Cell, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
 
@@ -202,9 +203,6 @@ fn generate_wrapped_text(text: String, limit: u32) -> String {
 fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let frame_size: tui::layout::Rect = frame.size();
     let highlight_symbol: &str = "> ";
-    let reacts: Vec<tui::layout::Rect> = Layout::default()
-        .constraints([Constraint::Percentage(100)].as_ref())
-        .split(frame_size);
     let normal_style: Style = Style::default()
         .add_modifier(Modifier::UNDERLINED)
         .add_modifier(Modifier::BOLD);
@@ -260,5 +258,23 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .highlight_style(selected_style)
         .highlight_symbol(highlight_symbol)
         .widths(widths);
-    frame.render_stateful_widget(table, reacts[0], &mut app.state);
+    // frame.render_stateful_widget(table, reacts[0], &mut app.state);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(95), Constraint::Percentage(5)].as_ref())
+        .split(frame.size());
+    let text = vec![
+        Spans::from(vec![
+            Span::styled("  Select", Style::default().fg(Color::Green)),
+            Span::raw(": Arrow Keys and Enter Key"),
+        ]),
+        Spans::from(vec![
+            Span::styled("  Quit", Style::default().fg(Color::Green)),
+            Span::raw(": 'q' Key"),
+        ]),
+    ];
+    let paragraph = Paragraph::new(text);
+    frame.render_stateful_widget(table, chunks[0], &mut app.state);
+    frame.render_widget(paragraph, chunks[1]);
 }
