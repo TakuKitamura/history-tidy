@@ -20,6 +20,7 @@ termion = "1.5"
 linked-hash-map = "0.5.4"
 textwrap = "0.14.2"
 colored = "2"
+unicode-width = "0.1.9"
 
 [profile.release]
 lto = true

@@ -16,12 +16,19 @@ use textwrap::word_splitters::NoHyphenation;
 use textwrap::Options;
 use tui::{
     backend::{Backend, TermionBackend},
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
+
+use unicode_width::UnicodeWidthStr;
+
+// enum InputMode {
+//     Normal,
+//     Editing,
+// }
 
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
@@ -83,6 +90,11 @@ struct App {
     header_cells: Vec<String>,
     select_hashtag_header: Vec<String>,
     view_id: u8,
+    show_popup: bool,
+    input: String,
+    input_mode: bool,
+    messages: Vec<String>,
+    scroll: u16,
 }
 
 impl App {
@@ -114,6 +126,11 @@ impl App {
             header_cells: select_hashtag_header.to_owned(),
             select_hashtag_header: select_hashtag_header.to_owned(),
             view_id: HASHTAG_VIEW_ID,
+            show_popup: false,
+            input: String::new(),
+            input_mode: false,
+            messages: Vec::new(),
+            scroll: 0,
         }
     }
 }
@@ -124,8 +141,52 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
 
         if let Event::Key(key) = event::read().unwrap() {
             let key_code: event::KeyCode = key.code;
+
+            // match app.input_mode {
+            // InputMode::Normal => match key.code {
+            //     KeyCode::Char('e') => {
+            //         app.input_mode = InputMode::Editing;
+            //     }
+            //     // KeyCode::Char('q') => {
+            //     //     return Ok(());
+            //     // }
+            //     _ => {}
+            // },
+
+            // }
+
+            if app.input_mode {
+                if key_code == KeyCode::Enter {
+                    app.messages.push(app.input.drain(..).collect());
+                } else if key_code == KeyCode::Backspace {
+                    if app.input.len() > 0 {
+                        let x = app.input.pop().unwrap();
+                        if x == '\n' {
+                            app.input.pop();
+
+                            if app.scroll > 0 {
+                                app.scroll -= 1;
+                            }
+                        }
+                    }
+                    // let x = app.input.pop().unwrap();
+                } else if key_code == KeyCode::Esc {
+                    app.input_mode = false;
+                } else {
+                    match key_code {
+                        KeyCode::Char(c) => {
+                            app.input.push(c);
+                        }
+                        _ => {}
+                    }
+                }
+                continue;
+            }
+
             if key_code == KeyCode::Char('q') {
                 return "".to_owned();
+            } else if key_code == KeyCode::Char('e') {
+                app.input_mode = true;
             } else if key_code == KeyCode::Down {
                 let i: usize = match app.state.selected() {
                     Some(i) => {
@@ -199,6 +260,18 @@ fn generate_wrapped_text(text: String, limit: u32) -> String {
 
 fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let frame_size: tui::layout::Rect = frame.size();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Length(frame_size.height - 2),
+                Constraint::Length(2),
+            ]
+            .as_ref(),
+        )
+        .split(frame.size());
+
     let highlight_symbol: &str = "> ";
     let normal_style: Style = Style::default()
         .add_modifier(Modifier::UNDERLINED)
@@ -209,10 +282,10 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
         let text_margin: u32 = highlight_symbol.len() as u32;
 
-        let text_width: u32 = if frame_size.width as u32 >= text_margin {
-            frame_size.width as u32 - text_margin
+        let text_width: u32 = if chunks[0].width as u32 >= text_margin {
+            chunks[0].width as u32 - text_margin
         } else {
-            frame_size.width as u32
+            chunks[0].width as u32
         };
 
         let mut height_count: u16 = 1;
@@ -256,21 +329,75 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .widths(widths);
     // frame.render_stateful_widget(table, reacts[0], &mut app.state);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(95), Constraint::Percentage(5)].as_ref())
-        .split(frame.size());
     let text = vec![
         Spans::from(vec![
-            Span::styled("  Select", Style::default().fg(Color::Green)),
+            Span::raw("  "),
+            Span::styled("Select", Style::default().fg(Color::Green)),
             Span::raw(": Arrow Keys and Enter Key"),
         ]),
         Spans::from(vec![
-            Span::styled("  Quit", Style::default().fg(Color::Green)),
+            Span::raw("  "),
+            Span::styled("Quit", Style::default().fg(Color::Green)),
             Span::raw(": 'q' Key"),
         ]),
     ];
     let paragraph = Paragraph::new(text);
-    frame.render_stateful_widget(table, chunks[0], &mut app.state);
     frame.render_widget(paragraph, chunks[1]);
+
+    // if app.show_popup {
+    // let block = Block::default().title("Popup").borders(Borders::ALL);
+    // let area = centered_rect(60, 20, frame_size);
+    // frame.render_widget(Clear, area); //this clears out the background
+    // frame.render_widget(block, area);
+    if app.input_mode == false {
+        frame.render_stateful_widget(table, chunks[0], &mut app.state);
+    } else {
+        // app.input = generate_wrapped_text(app.input.to_owned(), frame_size.width as u32 - 2);
+        let count = app.input.to_owned().match_indices("\n").count();
+        if app.input.to_owned().split("\n").last().unwrap().width() as u32 > chunks[0].width as u32
+        {
+            // app.input += "\n";
+
+            if count + 1 >= chunks[0].height as usize {
+                app.scroll += 1;
+            }
+        }
+
+        app.input = generate_wrapped_text(app.input.to_owned(), chunks[0].width as u32);
+        let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
+        frame.render_widget(input, chunks[0]);
+
+        let x = app.input.to_owned().split("\n").last().unwrap().width() as u16;
+
+        let count = app.input.to_owned().match_indices("\n").count();
+
+        let y = count as u16 - app.scroll;
+        frame.set_cursor(x, y)
+    }
 }
+
+// fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+//     let popup_layout = Layout::default()
+//         .direction(Direction::Vertical)
+//         .constraints(
+//             [
+//                 Constraint::Percentage((100 - percent_y) / 2),
+//                 Constraint::Percentage(percent_y),
+//                 Constraint::Percentage((100 - percent_y) / 2),
+//             ]
+//             .as_ref(),
+//         )
+//         .split(r);
+
+//     Layout::default()
+//         .direction(Direction::Horizontal)
+//         .constraints(
+//             [
+//                 Constraint::Percentage((100 - percent_x) / 2),
+//                 Constraint::Percentage(percent_x),
+//                 Constraint::Percentage((100 - percent_x) / 2),
+//             ]
+//             .as_ref(),
+//         )
+//         .split(popup_layout[1])[1]
+// }
