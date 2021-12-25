@@ -34,7 +34,7 @@ const COMMAND_LABEL: &'static str = "Command";
 
 const ALL_HASHTAG: &'static str = "ALL";
 
-pub fn init_ui(map: LinkedHashMap<String, LinkedHashMap<String, String>>) {
+pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
     enable_raw_mode().unwrap();
     let mut stdout: Stdout = stdout();
     execute!(stdout, EnterAlternateScreen).unwrap();
@@ -82,14 +82,14 @@ struct App {
     table_title: &'static str,
     hashtags: Vec<Vec<String>>,
     hashtags_memo: Vec<Vec<String>>,
-    history_map: LinkedHashMap<String, LinkedHashMap<String, String>>,
+    history_map: LinkedHashMap<String, Vec<String>>,
     header_cells: Vec<&'static str>,
     select_hashtag_header: Vec<&'static str>,
     view_id: u8,
 }
 
 impl App {
-    fn new(history_map: LinkedHashMap<String, LinkedHashMap<String, String>>) -> App {
+    fn new(history_map: LinkedHashMap<String, Vec<String>>) -> App {
         let mut hashtags: Vec<Vec<String>> = vec![];
         let mut all_hashtag: Vec<String> = vec![];
         for hashtag in (&history_map).keys() {
@@ -158,19 +158,15 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             {
                 let selected: usize = app.state.selected().unwrap();
                 let select_hashtag: &Vec<String> = &app.hashtags[selected];
-                let history_group: &&LinkedHashMap<String, String> =
+                let history_group: &&Vec<String> =
                     &app.history_map.get(select_hashtag[0].as_str()).unwrap();
 
                 let mut hashtags: Vec<Vec<String>> = vec![];
-                for (history, message) in history_group.iter() {
+                for history in history_group.iter() {
                     if select_hashtag[0] == ALL_HASHTAG {
                         hashtags.push(vec![history.to_owned()]);
                     } else {
-                        if message.len() > 0 {
-                            hashtags.push(vec![history.to_owned() + " # " + &message.to_owned()]);
-                        } else {
-                            hashtags.push(vec![history.to_owned()]);
-                        }
+                        hashtags.push(vec![history.to_owned()]);
                     }
                 }
                 app.header_cells = vec![COMMAND_LABEL];
