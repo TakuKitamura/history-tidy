@@ -375,40 +375,41 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         let chunks_width = chunks[0].width;
         let chunks_height = chunks[0].height;
 
-        // println!("{}", chunks_height);
-        // app.input = generate_wrapped_text(app.input.to_owned(), chunks_width);
+        app.input = generate_wrapped_text(
+            app.input.to_owned().replace("\n", ""),
+            chunks_width as u32,
+            "HOGE",
+        );
 
-        let app_input = app.input.to_owned();
+        app.scroll = if app.input.to_owned().matches("\n").count() < chunks_height as usize {
+            0
+        } else {
+            app.input.to_owned().matches("\n").count() as u16 - chunks_height + 1
+        };
 
-        app.input = generate_wrapped_text(app_input.replace("\n", ""), chunks_width as u32, "HOGE");
-
-        let last_width = app_input.split("\n").last().unwrap().width();
-        let count = app.input.to_owned().matches("\n").count();
-        // app.debug = format!("{}, {}", app_input.width(), chunks_width);
-        if last_width > chunks_width as usize {
-            // if last_width == chunks_width as usize {
-            //     app.input += "\n";
-            // }
-
-            let line_count = app.input.to_owned().matches("\n").count() + 1;
-            if line_count > chunks_height as usize {
-                app.scroll += 1;
-            }
-        }
+        app.debug = format!(
+            "{}, {}",
+            app.input.split("\n").last().unwrap().width(),
+            app.input.to_owned().matches("\n").count()
+        );
 
         let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
         frame.render_widget(input, chunks[0]);
 
-        let mut x = last_width as u16;
-
-        // let count = app_input.match_indices("\n").count();
-        let mut y = count as u16 - app.scroll;
-
-        if x == chunks_width {
-            x = 0;
-            y += 1;
-        }
-        frame.set_cursor(x, y)
+        frame.set_cursor(
+            if app.input.split("\n").last().unwrap().width() == chunks_width as usize {
+                0
+            } else {
+                app.input.split("\n").last().unwrap().width() as u16
+            },
+            // app.input.split("\n").last().unwrap().width() as u16,
+            if app.input.split("\n").last().unwrap().width() == chunks_width as usize {
+                app.input.to_owned().matches("\n").count() as u16 + 1
+            } else {
+                app.input.to_owned().matches("\n").count() as u16
+            } - app.scroll,
+            // app.input.to_owned().matches("\n").count() as u16 - app.scroll,
+        )
     }
 
     let text = vec![
