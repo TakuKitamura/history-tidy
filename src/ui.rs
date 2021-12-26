@@ -39,6 +39,9 @@ const HASHTAG_COMMAND_VIEW_ID: u8 = 3;
 
 const ALL_HASHTAG: &'static str = "ALL";
 
+const WRAP_TABLE_TEXT: &str = "table";
+const WRAP_EDITOR_TEXT: &str = "editor";
+
 pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
     enable_raw_mode().unwrap();
     let mut stdout: Stdout = stdout();
@@ -91,13 +94,10 @@ struct App {
     header_cells: Vec<String>,
     select_hashtag_header: Vec<String>,
     view_id: u8,
-    show_popup: bool,
     input: String,
     input_mode: bool,
-    messages: Vec<String>,
     scroll: u16,
     debug: String,
-    last_width: usize,
 }
 
 impl App {
@@ -129,13 +129,10 @@ impl App {
             header_cells: select_hashtag_header.to_owned(),
             select_hashtag_header: select_hashtag_header.to_owned(),
             view_id: HASHTAG_VIEW_ID,
-            show_popup: false,
             input: String::new(),
             input_mode: false,
-            messages: Vec::new(),
             scroll: 0,
             debug: String::new(),
-            last_width: 0,
         }
     }
 }
@@ -150,6 +147,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             if app.input_mode {
                 if key_code == KeyCode::Enter {
                     // app.messages.push(app.input.drain(..).collect());
+                    app.debug = format!("{}", app.input);
                     app.input_mode = false;
                 } else if key_code == KeyCode::Backspace {
                     if app.input.len() > 0 {
@@ -161,7 +159,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                             }
                         }
                     }
-                    // let x = app.input.pop().unwrap();
                 } else if key_code == KeyCode::Esc {
                     app.input_mode = false;
                 } else {
@@ -173,7 +170,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     }
                 }
 
-                app.last_width = app.input.split("\n").last().unwrap().width();
                 continue;
             }
 
@@ -246,35 +242,16 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         }
     }
 }
-
-#[derive(Clone, Copy, Debug)]
-pub struct MyWordSplitter;
-
-/// `Hello` implements `WordSplitter` by not splitting the
-/// word at all.
-impl WordSplitter for MyWordSplitter {
-    fn split_points(&self, word: &str) -> Vec<usize> {
-        // let x = word.char_indices().map(|(x, y)| word.len()).collect();
-        return vec![];
-    }
-}
-
-// impl WordSeparator for MyWordSplitter {
-//     fn is_word_separator(&self, c: char) -> bool {
-//         c.is_whitespace()
-//     }
-// }
-
-fn generate_wrapped_text(text: String, limit: u32, mode: &str) -> String {
-    if mode == "NoHyphenation" {
-        let options = Options::new(limit as usize).word_splitter(NoHyphenation);
+fn wrap_text(text: String, limit: usize, mode: &str) -> String {
+    let base_options = Options::new(limit).word_splitter(NoHyphenation);
+    if mode == WRAP_TABLE_TEXT {
+        let options = base_options.word_separator(UnicodeBreakProperties);
+        return textwrap::fill(text.as_str(), &options);
+    } else if mode == WRAP_EDITOR_TEXT {
+        let options = base_options.word_separator(AsciiSpace);
         return textwrap::fill(text.as_str(), &options);
     } else {
-        let options = Options::new(limit as usize)
-            .word_splitter(NoHyphenation)
-            .word_separator(AsciiSpace);
-        // options;
-        return textwrap::fill(text.as_str(), &options);
+        unreachable!();
     }
 }
 
@@ -300,12 +277,12 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let header: tui::widgets::Row = Row::new(header_cells).height(1).style(normal_style);
 
     let rows: Map<Iter<Vec<String>>, _> = app.hashtags.iter().map(|item| {
-        let text_margin: u32 = highlight_symbol.len() as u32;
+        let text_margin: usize = highlight_symbol.len();
 
-        let text_width: u32 = if chunks[0].width as u32 >= text_margin {
-            chunks[0].width as u32 - text_margin
+        let text_width: usize = if chunks[0].width as usize >= text_margin {
+            chunks[0].width as usize - text_margin
         } else {
-            chunks[0].width as u32
+            chunks[0].width as usize
         };
 
         let mut height_count: u16 = 1;
@@ -313,7 +290,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             // one line
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let content: String = "$ ".to_owned() + content.as_str();
-                let converted_string = generate_wrapped_text(content, text_width, "NoHyphenation");
+                let converted_string = wrap_text(content, text_width, WRAP_TABLE_TEXT);
                 height_count = converted_string.matches("\n").count() as u16 + 1;
                 return converted_string;
             });
@@ -323,7 +300,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             // two line
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let converted_string =
-                    generate_wrapped_text(content.to_owned(), text_width / 2, "NoHyphenation");
+                    wrap_text(content.to_owned(), text_width / 2, WRAP_TABLE_TEXT);
 
                 let tmp_height_count = converted_string.matches("\n").count() as u16 + 1;
                 if tmp_height_count > height_count {
@@ -356,10 +333,10 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         let chunks_width = chunks[0].width;
         let chunks_height = chunks[0].height;
 
-        app.input = generate_wrapped_text(
+        app.input = wrap_text(
             app.input.to_owned().replace("\n", ""),
-            chunks_width as u32,
-            "HOGE",
+            chunks_width as usize,
+            WRAP_EDITOR_TEXT,
         );
 
         app.scroll = if app.input.to_owned().matches("\n").count() < chunks_height as usize {
@@ -374,13 +351,13 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             0
         };
 
-        app.debug = format!(
-            "{},{},{},{}",
-            app.input.split("\n").last().unwrap().width(),
-            app.input.to_owned().matches("\n").count(),
-            chunks_width,
-            chunks_height,
-        );
+        // app.debug = format!(
+        //     "{},{},{},{}",
+        //     app.input.split("\n").last().unwrap().width(),
+        //     app.input.to_owned().matches("\n").count(),
+        //     chunks_width,
+        //     chunks_height,
+        // );
 
         let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
         frame.render_widget(input, chunks[0]);
