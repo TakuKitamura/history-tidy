@@ -12,7 +12,8 @@ use std::io::Write;
 use std::iter::Map;
 use std::path::PathBuf;
 use std::slice::Iter;
-use textwrap::word_splitters::NoHyphenation;
+use textwrap::word_separators::*;
+use textwrap::word_splitters::*;
 use textwrap::Options;
 use tui::{
     backend::{Backend, TermionBackend},
@@ -259,9 +260,35 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     }
 }
 
-fn generate_wrapped_text(text: String, limit: u32) -> String {
-    let options = Options::new(limit as usize).word_splitter(NoHyphenation);
-    return textwrap::fill(text.as_str(), &options);
+#[derive(Clone, Copy, Debug)]
+pub struct MyWordSplitter;
+
+/// `Hello` implements `WordSplitter` by not splitting the
+/// word at all.
+impl WordSplitter for MyWordSplitter {
+    fn split_points(&self, word: &str) -> Vec<usize> {
+        // let x = word.char_indices().map(|(x, y)| word.len()).collect();
+        return vec![];
+    }
+}
+
+// impl WordSeparator for MyWordSplitter {
+//     fn is_word_separator(&self, c: char) -> bool {
+//         c.is_whitespace()
+//     }
+// }
+
+fn generate_wrapped_text(text: String, limit: u32, mode: &str) -> String {
+    if mode == "NoHyphenation" {
+        let options = Options::new(limit as usize).word_splitter(NoHyphenation);
+        return textwrap::fill(text.as_str(), &options);
+    } else {
+        let options = Options::new(limit as usize)
+            .word_splitter(NoHyphenation)
+            .word_separator(AsciiSpace);
+        // options;
+        return textwrap::fill(text.as_str(), &options);
+    }
 }
 
 fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
@@ -299,7 +326,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             // one line
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
                 let content: String = "$ ".to_owned() + content.as_str();
-                let converted_string = generate_wrapped_text(content, text_width);
+                let converted_string = generate_wrapped_text(content, text_width, "NoHyphenation");
                 height_count = converted_string.matches("\n").count() as u16 + 1;
                 return converted_string;
             });
@@ -308,7 +335,8 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         } else {
             // two line
             let cells: Map<Iter<String>, _> = item.iter().map(|content: &String| {
-                let converted_string = generate_wrapped_text(content.to_owned(), text_width / 2);
+                let converted_string =
+                    generate_wrapped_text(content.to_owned(), text_width / 2, "NoHyphenation");
 
                 let tmp_height_count = converted_string.matches("\n").count() as u16 + 1;
                 if tmp_height_count > height_count {
@@ -352,12 +380,15 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
 
         let app_input = app.input.to_owned();
 
+        app.input = generate_wrapped_text(app_input.replace("\n", ""), chunks_width as u32, "HOGE");
+
         let last_width = app_input.split("\n").last().unwrap().width();
         let count = app.input.to_owned().matches("\n").count();
-
-        app.debug = format!("{}, {}", last_width, chunks_height);
-        if last_width >= chunks_width as usize {
-            app.input += "\n";
+        // app.debug = format!("{}, {}", app_input.width(), chunks_width);
+        if last_width > chunks_width as usize {
+            // if last_width == chunks_width as usize {
+            //     app.input += "\n";
+            // }
 
             let line_count = app.input.to_owned().matches("\n").count() + 1;
             if line_count > chunks_height as usize {
