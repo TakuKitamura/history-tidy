@@ -95,6 +95,8 @@ struct App {
     input_mode: bool,
     messages: Vec<String>,
     scroll: u16,
+    debug: String,
+    last_width: usize,
 }
 
 impl App {
@@ -131,6 +133,8 @@ impl App {
             input_mode: false,
             messages: Vec::new(),
             scroll: 0,
+            debug: String::new(),
+            last_width: 0,
         }
     }
 }
@@ -157,13 +161,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
 
             if app.input_mode {
                 if key_code == KeyCode::Enter {
-                    app.messages.push(app.input.drain(..).collect());
+                    // app.messages.push(app.input.drain(..).collect());
+                    app.input_mode = false;
                 } else if key_code == KeyCode::Backspace {
                     if app.input.len() > 0 {
                         let x = app.input.pop().unwrap();
                         if x == '\n' {
                             app.input.pop();
-
                             if app.scroll > 0 {
                                 app.scroll -= 1;
                             }
@@ -180,6 +184,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                         _ => {}
                     }
                 }
+
+                app.last_width = app.input.split("\n").last().unwrap().width();
                 continue;
             }
 
@@ -329,6 +335,51 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .widths(widths);
     // frame.render_stateful_widget(table, reacts[0], &mut app.state);
 
+    // if app.show_popup {
+    // let block = Block::default().title("Popup").borders(Borders::ALL);
+    // let area = centered_rect(60, 20, frame_size);
+    // frame.render_widget(Clear, area); //this clears out the background
+    // frame.render_widget(block, area);
+    if app.input_mode == false {
+        frame.render_stateful_widget(table, chunks[0], &mut app.state);
+    } else {
+        // ウィンドウサイズを変更しないかぎり普遍
+        let chunks_width = chunks[0].width;
+        let chunks_height = chunks[0].height;
+
+        // println!("{}", chunks_height);
+        // app.input = generate_wrapped_text(app.input.to_owned(), chunks_width);
+
+        let app_input = app.input.to_owned();
+
+        let last_width = app_input.split("\n").last().unwrap().width();
+        let count = app.input.to_owned().matches("\n").count();
+
+        app.debug = format!("{}, {}", last_width, chunks_height);
+        if last_width >= chunks_width as usize {
+            app.input += "\n";
+
+            let line_count = app.input.to_owned().matches("\n").count() + 1;
+            if line_count > chunks_height as usize {
+                app.scroll += 1;
+            }
+        }
+
+        let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
+        frame.render_widget(input, chunks[0]);
+
+        let mut x = last_width as u16;
+
+        // let count = app_input.match_indices("\n").count();
+        let mut y = count as u16 - app.scroll;
+
+        if x == chunks_width {
+            x = 0;
+            y += 1;
+        }
+        frame.set_cursor(x, y)
+    }
+
     let text = vec![
         Spans::from(vec![
             Span::raw("  "),
@@ -338,42 +389,12 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         Spans::from(vec![
             Span::raw("  "),
             Span::styled("Quit", Style::default().fg(Color::Green)),
-            Span::raw(": 'q' Key"),
+            Span::raw(": 'q' Key, "),
+            Span::styled(app.debug.as_str(), Style::default().fg(Color::Red)),
         ]),
     ];
     let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph, chunks[1]);
-
-    // if app.show_popup {
-    // let block = Block::default().title("Popup").borders(Borders::ALL);
-    // let area = centered_rect(60, 20, frame_size);
-    // frame.render_widget(Clear, area); //this clears out the background
-    // frame.render_widget(block, area);
-    if app.input_mode == false {
-        frame.render_stateful_widget(table, chunks[0], &mut app.state);
-    } else {
-        // app.input = generate_wrapped_text(app.input.to_owned(), frame_size.width as u32 - 2);
-        let count = app.input.to_owned().match_indices("\n").count();
-        if app.input.to_owned().split("\n").last().unwrap().width() as u32 > chunks[0].width as u32
-        {
-            // app.input += "\n";
-
-            if count + 1 >= chunks[0].height as usize {
-                app.scroll += 1;
-            }
-        }
-
-        app.input = generate_wrapped_text(app.input.to_owned(), chunks[0].width as u32);
-        let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
-        frame.render_widget(input, chunks[0]);
-
-        let x = app.input.to_owned().split("\n").last().unwrap().width() as u16;
-
-        let count = app.input.to_owned().match_indices("\n").count();
-
-        let y = count as u16 - app.scroll;
-        frame.set_cursor(x, y)
-    }
 }
 
 // fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
