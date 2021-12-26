@@ -147,19 +147,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         if let Event::Key(key) = event::read().unwrap() {
             let key_code: event::KeyCode = key.code;
 
-            // match app.input_mode {
-            // InputMode::Normal => match key.code {
-            //     KeyCode::Char('e') => {
-            //         app.input_mode = InputMode::Editing;
-            //     }
-            //     // KeyCode::Char('q') => {
-            //     //     return Ok(());
-            //     // }
-            //     _ => {}
-            // },
-
-            // }
-
             if app.input_mode {
                 if key_code == KeyCode::Enter {
                     // app.messages.push(app.input.drain(..).collect());
@@ -361,13 +348,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .highlight_style(selected_style)
         .highlight_symbol(highlight_symbol)
         .widths(widths);
-    // frame.render_stateful_widget(table, reacts[0], &mut app.state);
 
-    // if app.show_popup {
-    // let block = Block::default().title("Popup").borders(Borders::ALL);
-    // let area = centered_rect(60, 20, frame_size);
-    // frame.render_widget(Clear, area); //this clears out the background
-    // frame.render_widget(block, area);
     if app.input_mode == false {
         frame.render_stateful_widget(table, chunks[0], &mut app.state);
     } else {
@@ -385,12 +366,20 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             0
         } else {
             app.input.to_owned().matches("\n").count() as u16 - chunks_height + 1
+        } + if app.input.split("\n").last().unwrap().width() == chunks_width as usize
+            && app.input.to_owned().matches("\n").count() + 1 >= chunks_height as usize
+        {
+            1
+        } else {
+            0
         };
 
         app.debug = format!(
-            "{}, {}",
+            "{},{},{},{}",
             app.input.split("\n").last().unwrap().width(),
-            app.input.to_owned().matches("\n").count()
+            app.input.to_owned().matches("\n").count(),
+            chunks_width,
+            chunks_height,
         );
 
         let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
@@ -402,13 +391,11 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             } else {
                 app.input.split("\n").last().unwrap().width() as u16
             },
-            // app.input.split("\n").last().unwrap().width() as u16,
             if app.input.split("\n").last().unwrap().width() == chunks_width as usize {
                 app.input.to_owned().matches("\n").count() as u16 + 1
             } else {
                 app.input.to_owned().matches("\n").count() as u16
             } - app.scroll,
-            // app.input.to_owned().matches("\n").count() as u16 - app.scroll,
         )
     }
 
@@ -428,29 +415,3 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
     let paragraph = Paragraph::new(text);
     frame.render_widget(paragraph, chunks[1]);
 }
-
-// fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-//     let popup_layout = Layout::default()
-//         .direction(Direction::Vertical)
-//         .constraints(
-//             [
-//                 Constraint::Percentage((100 - percent_y) / 2),
-//                 Constraint::Percentage(percent_y),
-//                 Constraint::Percentage((100 - percent_y) / 2),
-//             ]
-//             .as_ref(),
-//         )
-//         .split(r);
-
-//     Layout::default()
-//         .direction(Direction::Horizontal)
-//         .constraints(
-//             [
-//                 Constraint::Percentage((100 - percent_x) / 2),
-//                 Constraint::Percentage(percent_x),
-//                 Constraint::Percentage((100 - percent_x) / 2),
-//             ]
-//             .as_ref(),
-//         )
-//         .split(popup_layout[1])[1]
-// }
