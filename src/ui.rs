@@ -26,11 +26,6 @@ use tui::{
 
 use unicode_width::UnicodeWidthStr;
 
-// enum InputMode {
-//     Normal,
-//     Editing,
-// }
-
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
 const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
 const HASHTAG_VIEW_ID: u8 = 1;
@@ -314,10 +309,9 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         };
     });
     let header_cells_count: u16 = 100 / (app.header_cells.len() as u16);
-    let widths: &[tui::layout::Constraint; 3] = &[
+    let widths: &[tui::layout::Constraint; 2] = &[
         Constraint::Percentage(header_cells_count),
-        Constraint::Length(30),
-        Constraint::Min(10),
+        Constraint::Percentage(header_cells_count),
     ];
     let selected_style: Style = Style::default().add_modifier(Modifier::REVERSED);
     let table: tui::widgets::Table = Table::new(rows)
@@ -330,50 +324,42 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         frame.render_stateful_widget(table, chunks[0], &mut app.state);
     } else {
         // ウィンドウサイズを変更しないかぎり普遍
-        let chunks_width = chunks[0].width;
-        let chunks_height = chunks[0].height;
+        let chunks_width: usize = chunks[0].width as usize;
+        let chunks_height: usize = chunks[0].height as usize;
 
-        app.input = wrap_text(
-            app.input.to_owned().replace("\n", ""),
-            chunks_width as usize,
-            WRAP_EDITOR_TEXT,
-        );
+        let raw_input = app.input.replace("\n", "");
 
-        app.scroll = if app.input.to_owned().matches("\n").count() < chunks_height as usize {
+        app.input = wrap_text(raw_input, chunks_width as usize, WRAP_EDITOR_TEXT);
+
+        let return_count: usize = app.input.matches("\n").count();
+        let last_line_width: usize = app.input.split("\n").last().unwrap().width();
+
+        app.scroll = if return_count < chunks_height {
             0
         } else {
-            app.input.to_owned().matches("\n").count() as u16 - chunks_height + 1
-        } + if app.input.split("\n").last().unwrap().width() == chunks_width as usize
-            && app.input.to_owned().matches("\n").count() + 1 >= chunks_height as usize
-        {
+            return_count as u16 - chunks_height as u16 + 1
+        } + if last_line_width == chunks_width && chunks_height <= return_count + 1 {
             1
         } else {
             0
         };
 
-        // app.debug = format!(
-        //     "{},{},{},{}",
-        //     app.input.split("\n").last().unwrap().width(),
-        //     app.input.to_owned().matches("\n").count(),
-        //     chunks_width,
-        //     chunks_height,
-        // );
-
         let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
         frame.render_widget(input, chunks[0]);
 
-        frame.set_cursor(
-            if app.input.split("\n").last().unwrap().width() == chunks_width as usize {
-                0
-            } else {
-                app.input.split("\n").last().unwrap().width() as u16
-            },
-            if app.input.split("\n").last().unwrap().width() == chunks_width as usize {
-                app.input.to_owned().matches("\n").count() as u16 + 1
-            } else {
-                app.input.to_owned().matches("\n").count() as u16
-            } - app.scroll,
-        )
+        let cursor_x: u16 = if last_line_width == chunks_width {
+            0
+        } else {
+            last_line_width as u16
+        };
+
+        let cursor_y: u16 = if last_line_width == chunks_width {
+            return_count as u16 + 1
+        } else {
+            return_count as u16
+        } - app.scroll;
+
+        frame.set_cursor(cursor_x, cursor_y)
     }
 
     let text = vec![
