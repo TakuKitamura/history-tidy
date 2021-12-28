@@ -28,8 +28,8 @@ use tui::{
 use crate::utils::error_exit;
 use unicode_width::UnicodeWidthStr;
 
-const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
-const SELECT_COMMAND_TITLE: &'static str = " Select Command View ";
+const SELECT_HASHTAG_TITLE: &'static str = "Hashtag View ";
+const SELECT_COMMAND_TITLE: &'static str = "Command View ";
 const HASHTAG_VIEW_ID: u8 = 1;
 const ALL_COMMAND_VIEW_ID: u8 = 2;
 const HASHTAG_COMMAND_VIEW_ID: u8 = 3;
@@ -61,8 +61,8 @@ pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
     match execute!(stdout, EnterAlternateScreen) {
         Ok(_) => {}
         Err(err) => {
-            error_exit("Failed to enter alternate screen", err, 1);
             reset();
+            error_exit("Failed to enter alternate screen", err, 1);
             return;
         }
     }
@@ -75,7 +75,6 @@ pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
         Err(err) => {
             reset();
             error_exit("Failed to create new terminal", err, 1);
-
             return;
         }
     };
@@ -121,14 +120,14 @@ pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
         Ok(mut file) => match file.write_all(res.as_bytes()) {
             Ok(_) => {}
             Err(e) => {
-                error_exit("Failed to write script file", e, 1);
                 reset();
+                error_exit("Failed to write script file", e, 1);
                 return;
             }
         },
         Err(e) => {
-            error_exit("Failed to create script file", e, 1);
             reset();
+            error_exit("Failed to create script file", e, 1);
             return;
         }
     };
@@ -191,6 +190,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         match terminal.draw(|f: &mut Frame<B>| ui(f, &mut app)) {
             Ok(_) => {}
             Err(err) => {
+                reset();
                 error_exit("Failed to draw ui", err, 1);
                 unreachable!();
             }
@@ -199,6 +199,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         let event: crossterm::event::Event = match event::read() {
             Ok(event) => event,
             Err(err) => {
+                reset();
                 error_exit("Failed to read event", err, 1);
                 unreachable!();
             }
@@ -432,7 +433,7 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         frame.set_cursor(cursor_x, cursor_y)
     }
 
-    let text = vec![
+    let help_text = vec![
         Spans::from(vec![
             Span::raw("  "),
             Span::styled("Select", Style::default().fg(Color::Green)),
@@ -445,6 +446,6 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             Span::styled(app.debug.as_str(), Style::default().fg(Color::Red)),
         ]),
     ];
-    let paragraph = Paragraph::new(text);
+    let paragraph = Paragraph::new(help_text);
     frame.render_widget(paragraph, chunks[1]);
 }
