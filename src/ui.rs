@@ -1,3 +1,5 @@
+use crate::hashtag::Hashtag;
+use crate::hashtag::HashtagParser;
 use colored::*;
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -143,9 +145,9 @@ struct App {
     select_hashtag_header: Vec<String>,
     view_id: u8,
     input: String,
-    input_mode: bool,
+    edit_mode: bool,
     scroll: u16,
-    debug: String,
+    error_message: String,
 }
 
 impl App {
@@ -178,9 +180,16 @@ impl App {
             select_hashtag_header: select_hashtag_header.to_owned(),
             view_id: HASHTAG_VIEW_ID,
             input: String::new(),
-            input_mode: false,
+            edit_mode: false,
             scroll: 0,
-            debug: String::new(),
+            error_message: String::new(),
+        }
+    }
+
+    fn get_select_item(&self) -> Vec<String> {
+        match self.state.selected() {
+            Some(index) => self.hashtags[index].clone(),
+            None => unreachable!(),
         }
     }
 }
@@ -211,11 +220,23 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         };
         let key_code: event::KeyCode = key.code;
 
-        if app.input_mode {
+        if app.edit_mode {
             if key_code == KeyCode::Enter {
                 // app.messages.push(app.input.drain(..).collect());
-                app.debug = format!("{}", app.input);
-                app.input_mode = false;
+                // app.debug = format!("{}", app.input);
+                let saved_hashtag = "#".to_owned() + &app.input;
+                let hashtags: Vec<Hashtag> =
+                    HashtagParser::new(&saved_hashtag).collect::<Vec<Hashtag>>();
+                // app.error_message = format!("{:?}", hashtags);
+                if hashtags.len() != 1 {
+                    app.error_message = "invalid hashtag(1)".to_owned();
+                } else if hashtags[0].end != app.input.chars().count() {
+                    app.error_message = "invalid hashtag(2)".to_owned();
+                    continue;
+                } else {
+                    app.error_message = String::new();
+                    app.edit_mode = false;
+                }
             } else if key_code == KeyCode::Backspace {
                 if app.input.len() > 0 {
                     let last_char: char = app.input.pop().unwrap();
@@ -227,7 +248,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                     }
                 }
             } else if key_code == KeyCode::Esc {
-                app.input_mode = false;
+                app.edit_mode = false;
             } else {
                 match key_code {
                     KeyCode::Char(c) => {
@@ -243,7 +264,17 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         if key_code == KeyCode::Char('q') {
             return "".to_owned();
         } else if key_code == KeyCode::Char('e') {
-            app.input_mode = true;
+            let select_item = app.get_select_item();
+            let hashtag_name: String = select_item[0].to_owned();
+            if hashtag_name != ALL_HASHTAG {
+                app.input = select_item[0]
+                    .to_owned()
+                    .split("#")
+                    .last()
+                    .unwrap()
+                    .to_owned();
+                app.edit_mode = true;
+            }
         } else if key_code == KeyCode::Down {
             let i: usize = match app.state.selected() {
                 Some(i) => {
@@ -271,22 +302,21 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
         } else if app.table_title == SELECT_HASHTAG_TITLE
             && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
         {
-            let selected_index: usize = app.state.selected().unwrap();
-            let select_hashtag: &Vec<String> = &app.hashtags[selected_index];
-            let history_group: &&Vec<String> =
-                &app.history_map.get(select_hashtag[0].as_str()).unwrap();
+            let select_item: Vec<String> = app.get_select_item();
+            let hashtag_name: String = select_item[0].to_owned();
+            let history_group: &&Vec<String> = &app.history_map.get(hashtag_name.as_str()).unwrap();
 
             let mut hashtags: Vec<Vec<String>> = vec![];
             for history in history_group.iter() {
-                if select_hashtag[0] == ALL_HASHTAG {
+                if hashtag_name == ALL_HASHTAG {
                     hashtags.push(vec![history.to_owned()]);
                 } else {
                     hashtags.push(vec![history.to_owned()]);
                 }
             }
 
-            app.header_cells = vec![select_hashtag[0].clone()];
-            if select_hashtag[0] == ALL_HASHTAG {
+            app.header_cells = vec![hashtag_name.clone()];
+            if hashtag_name == ALL_HASHTAG {
                 app.view_id = ALL_COMMAND_VIEW_ID;
             } else {
                 app.view_id = HASHTAG_COMMAND_VIEW_ID;
@@ -296,9 +326,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             app.state.select(Some(0));
             app.table_title = SELECT_COMMAND_TITLE;
         } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Enter {
-            let selected_index: usize = app.state.selected().unwrap();
-            let select_command: &Vec<String> = &app.hashtags[selected_index];
-            return select_command[0].to_owned();
+            let select_item: Vec<String> = app.get_select_item();
+            let select_command = select_item[0].to_owned();
+            return select_command;
         } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
             app.hashtags = app.hashtags_memo.clone();
             app.header_cells = app.select_hashtag_header.to_owned();
@@ -328,8 +358,8 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(frame_size.height - 2),
-                Constraint::Length(2),
+                Constraint::Length(frame_size.height - 3),
+                Constraint::Length(3),
             ]
             .as_ref(),
         )
@@ -391,14 +421,14 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         .highlight_symbol(highlight_symbol)
         .widths(widths);
 
-    if app.input_mode == false {
+    if app.edit_mode == false {
         frame.render_stateful_widget(table, chunks[0], &mut app.state);
     } else {
         // ウィンドウサイズを変更しないかぎり普遍
         let chunks_width: usize = chunks[0].width as usize;
         let chunks_height: usize = chunks[0].height as usize;
 
-        let raw_input = app.input.replace("\n", "");
+        let raw_input: String = app.input.replace("\n", "");
 
         app.input = wrap_text(raw_input, chunks_width as usize, WRAP_EDITOR_TEXT);
 
@@ -415,7 +445,8 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
             0
         };
 
-        let input = Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
+        let input: tui::widgets::Paragraph =
+            Paragraph::new(app.input.as_ref()).scroll((app.scroll, 0));
         frame.render_widget(input, chunks[0]);
 
         let cursor_x: u16 = if last_line_width == chunks_width {
@@ -433,19 +464,61 @@ fn ui<B: Backend>(frame: &mut Frame<B>, app: &mut App) {
         frame.set_cursor(cursor_x, cursor_y)
     }
 
-    let help_text = vec![
-        Spans::from(vec![
-            Span::raw("  "),
-            Span::styled("Select", Style::default().fg(Color::Green)),
-            Span::raw(": Arrow Keys and Enter Key"),
-        ]),
-        Spans::from(vec![
-            Span::raw("  "),
-            Span::styled("Quit", Style::default().fg(Color::Green)),
-            Span::raw(": 'q' Key, "),
-            Span::styled(app.debug.as_str(), Style::default().fg(Color::Red)),
-        ]),
-    ];
-    let paragraph = Paragraph::new(help_text);
+    let help_text: Vec<tui::text::Spans> = if app.edit_mode {
+        vec![
+            Spans::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    app.error_message.to_owned(),
+                    Style::default().fg(Color::Red),
+                ),
+            ]),
+            Spans::from(vec![
+                Span::raw("  "),
+                Span::styled("Save", Style::default().fg(Color::Green)),
+                Span::raw(": Enter Key"),
+            ]),
+            Spans::from(vec![
+                Span::raw("  "),
+                Span::styled("Cancel", Style::default().fg(Color::Green)),
+                Span::raw(": ESC Key"),
+            ]),
+        ]
+    } else {
+        let select_item: Vec<String> = app.get_select_item();
+        let is_selected_all: bool =
+            app.table_title == SELECT_HASHTAG_TITLE && select_item[0] == ALL_HASHTAG;
+        vec![
+            Spans::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    app.error_message.to_owned(),
+                    Style::default().fg(Color::Red),
+                ),
+            ]),
+            Spans::from(vec![
+                Span::raw("  "),
+                Span::styled("Select", Style::default().fg(Color::Green)),
+                Span::raw(": Arrow Keys and Enter Key"),
+            ]),
+            if is_selected_all {
+                Spans::from(vec![
+                    Span::raw("  "),
+                    Span::styled("Quit", Style::default().fg(Color::Green)),
+                    Span::raw(": 'q' Key"),
+                ])
+            } else {
+                Spans::from(vec![
+                    Span::raw("  "),
+                    Span::styled("Quit", Style::default().fg(Color::Green)),
+                    Span::raw(": 'q' Key, "),
+                    Span::styled("Edit", Style::default().fg(Color::Green)),
+                    Span::raw(": 'e' Key"),
+                ])
+            },
+        ]
+    };
+
+    let paragraph: tui::widgets::Paragraph = Paragraph::new(help_text);
     frame.render_widget(paragraph, chunks[1]);
 }
