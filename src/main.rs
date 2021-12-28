@@ -2,6 +2,7 @@ mod hashtag;
 mod parse_history;
 mod setting;
 mod ui;
+mod utils;
 
 use parse_history::*;
 use setting::command_line_setting;
@@ -17,6 +18,10 @@ fn main() {
             vec![]
         }
     };
+    if history_vec.len() == 0 {
+        println!("No history found");
+        exit(0);
+    }
     let command_hashmap = get_command_hashmap(history_vec);
     init_ui(command_hashmap);
     exit(0);

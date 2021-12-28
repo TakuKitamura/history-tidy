@@ -1,3 +1,4 @@
+use colored::*;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
@@ -24,6 +25,7 @@ use tui::{
     Frame, Terminal,
 };
 
+use crate::utils::error_exit;
 use unicode_width::UnicodeWidthStr;
 
 const SELECT_HASHTAG_TITLE: &'static str = " Select Hashtag View ";
@@ -37,21 +39,72 @@ const ALL_HASHTAG: &'static str = "ALL";
 const WRAP_TABLE_TEXT: &str = "table";
 const WRAP_EDITOR_TEXT: &str = "editor";
 
+pub fn reset() {
+    match disable_raw_mode() {
+        Ok(_) => {}
+        Err(err) => {
+            error_exit("Failed to disable raw mode", err, 1);
+            return;
+        }
+    }
+}
+
 pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
-    enable_raw_mode().unwrap();
+    match enable_raw_mode() {
+        Ok(_) => {}
+        Err(err) => {
+            error_exit("Failed to initialize ui", err, 1);
+            return;
+        }
+    }
     let mut stdout: Stdout = stdout();
-    execute!(stdout, EnterAlternateScreen).unwrap();
+    match execute!(stdout, EnterAlternateScreen) {
+        Ok(_) => {}
+        Err(err) => {
+            error_exit("Failed to enter alternate screen", err, 1);
+            reset();
+            return;
+        }
+    }
+
     let backend: tui::backend::TermionBackend<Stdout> = TermionBackend::new(stdout);
-    let mut terminal: Terminal<tui::backend::TermionBackend<Stdout>> =
-        Terminal::new(backend).unwrap();
+
+    let mut terminal: Terminal<tui::backend::TermionBackend<Stdout>> = match Terminal::new(backend)
+    {
+        Ok(t) => t,
+        Err(err) => {
+            reset();
+            error_exit("Failed to create new terminal", err, 1);
+
+            return;
+        }
+    };
 
     let mut app: App = App::new(map);
     app.state.select(Some(0));
     let res: String = run_app(&mut terminal, app);
 
-    disable_raw_mode().unwrap();
-    execute!(terminal.backend_mut(), LeaveAlternateScreen).unwrap();
-    terminal.show_cursor().unwrap();
+    match disable_raw_mode() {
+        Ok(_) => {}
+        Err(e) => {
+            error_exit("Failed to disable raw mode", e, 1);
+            return;
+        }
+    }
+    match execute!(terminal.backend_mut(), LeaveAlternateScreen) {
+        Ok(_) => {}
+        Err(e) => {
+            error_exit("Failed to leave alternate screen", e, 1);
+            return;
+        }
+    }
+    match terminal.show_cursor() {
+        Ok(_) => {}
+        Err(e) => {
+            error_exit("Failed to show cursor", e, 1);
+            return;
+        }
+    }
 
     let script_path: PathBuf = match home_dir() {
         Some(mut history_file_path) => {
@@ -64,20 +117,21 @@ pub fn init_ui(map: linked_hash_map::LinkedHashMap<String, Vec<String>>) {
         }
     };
 
-    let mut script_file: File = match File::create(script_path) {
-        Ok(file) => file,
+    match File::create(script_path) {
+        Ok(mut file) => match file.write_all(res.as_bytes()) {
+            Ok(_) => {}
+            Err(e) => {
+                error_exit("Failed to write script file", e, 1);
+                reset();
+                return;
+            }
+        },
         Err(e) => {
-            println!("{}", e);
+            error_exit("Failed to create script file", e, 1);
+            reset();
             return;
         }
     };
-    match script_file.write_all(res.as_bytes()) {
-        Ok(_) => {}
-        Err(e) => {
-            println!("{}", e);
-            return;
-        }
-    }
 }
 
 struct App {
@@ -134,106 +188,122 @@ impl App {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
     loop {
-        terminal.draw(|f: &mut Frame<B>| ui(f, &mut app)).unwrap();
+        match terminal.draw(|f: &mut Frame<B>| ui(f, &mut app)) {
+            Ok(_) => {}
+            Err(err) => {
+                error_exit("Failed to draw ui", err, 1);
+                unreachable!();
+            }
+        }
 
-        if let Event::Key(key) = event::read().unwrap() {
-            let key_code: event::KeyCode = key.code;
+        let event: crossterm::event::Event = match event::read() {
+            Ok(event) => event,
+            Err(err) => {
+                error_exit("Failed to read event", err, 1);
+                unreachable!();
+            }
+        };
 
-            if app.input_mode {
-                if key_code == KeyCode::Enter {
-                    // app.messages.push(app.input.drain(..).collect());
-                    app.debug = format!("{}", app.input);
-                    app.input_mode = false;
-                } else if key_code == KeyCode::Backspace {
-                    if app.input.len() > 0 {
-                        let x = app.input.pop().unwrap();
-                        if x == '\n' {
-                            app.input.pop();
-                            if app.scroll > 0 {
-                                app.scroll -= 1;
-                            }
+        let key: crossterm::event::KeyEvent = match event {
+            Event::Key(key) => key,
+            _ => continue,
+        };
+        let key_code: event::KeyCode = key.code;
+
+        if app.input_mode {
+            if key_code == KeyCode::Enter {
+                // app.messages.push(app.input.drain(..).collect());
+                app.debug = format!("{}", app.input);
+                app.input_mode = false;
+            } else if key_code == KeyCode::Backspace {
+                if app.input.len() > 0 {
+                    let last_char: char = app.input.pop().unwrap();
+                    if last_char == '\n' {
+                        app.input.pop();
+                        if app.scroll > 0 {
+                            app.scroll -= 1;
                         }
-                    }
-                } else if key_code == KeyCode::Esc {
-                    app.input_mode = false;
-                } else {
-                    match key_code {
-                        KeyCode::Char(c) => {
-                            app.input.push(c);
-                        }
-                        _ => {}
                     }
                 }
-
-                continue;
+            } else if key_code == KeyCode::Esc {
+                app.input_mode = false;
+            } else {
+                match key_code {
+                    KeyCode::Char(c) => {
+                        app.input.push(c);
+                    }
+                    _ => {}
+                }
             }
 
-            if key_code == KeyCode::Char('q') {
-                return "".to_owned();
-            } else if key_code == KeyCode::Char('e') {
-                app.input_mode = true;
-            } else if key_code == KeyCode::Down {
-                let i: usize = match app.state.selected() {
-                    Some(i) => {
-                        if i >= app.hashtags.len() - 1 {
-                            0
-                        } else {
-                            i + 1
-                        }
-                    }
-                    None => 0,
-                };
-                app.state.select(Some(i));
-            } else if key_code == KeyCode::Up {
-                let i: usize = match app.state.selected() {
-                    Some(i) => {
-                        if i == 0 {
-                            app.hashtags.len() - 1
-                        } else {
-                            i - 1
-                        }
-                    }
-                    None => 0,
-                };
-                app.state.select(Some(i));
-            } else if app.table_title == SELECT_HASHTAG_TITLE
-                && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
-            {
-                let selected: usize = app.state.selected().unwrap();
-                let select_hashtag: &Vec<String> = &app.hashtags[selected];
-                let history_group: &&Vec<String> =
-                    &app.history_map.get(select_hashtag[0].as_str()).unwrap();
+            continue;
+        }
 
-                let mut hashtags: Vec<Vec<String>> = vec![];
-                for history in history_group.iter() {
-                    if select_hashtag[0] == ALL_HASHTAG {
-                        hashtags.push(vec![history.to_owned()]);
+        if key_code == KeyCode::Char('q') {
+            return "".to_owned();
+        } else if key_code == KeyCode::Char('e') {
+            app.input_mode = true;
+        } else if key_code == KeyCode::Down {
+            let i: usize = match app.state.selected() {
+                Some(i) => {
+                    if i >= app.hashtags.len() - 1 {
+                        0
                     } else {
-                        hashtags.push(vec![history.to_owned()]);
+                        i + 1
                     }
                 }
-
-                app.header_cells = vec![select_hashtag[0].clone()];
-                if select_hashtag[0] == ALL_HASHTAG {
-                    app.view_id = ALL_COMMAND_VIEW_ID;
-                } else {
-                    app.view_id = HASHTAG_COMMAND_VIEW_ID;
+                None => 0,
+            };
+            app.state.select(Some(i));
+        } else if key_code == KeyCode::Up {
+            let i: usize = match app.state.selected() {
+                Some(i) => {
+                    if i == 0 {
+                        app.hashtags.len() - 1
+                    } else {
+                        i - 1
+                    }
                 }
-                hashtags.reverse();
-                app.hashtags = hashtags;
-                app.state.select(Some(0));
-                app.table_title = SELECT_COMMAND_TITLE;
-            } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Enter {
-                let selected: usize = app.state.selected().unwrap();
-                let select_command: &Vec<String> = &app.hashtags[selected];
-                return select_command[0].to_owned();
-            } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
-                app.hashtags = app.hashtags_memo.clone();
-                app.header_cells = app.select_hashtag_header.to_owned();
-                app.state.select(Some(0));
-                app.table_title = SELECT_HASHTAG_TITLE;
-                app.view_id = HASHTAG_VIEW_ID;
+                None => 0,
+            };
+            app.state.select(Some(i));
+        } else if app.table_title == SELECT_HASHTAG_TITLE
+            && (key_code == KeyCode::Enter || key_code == KeyCode::Right)
+        {
+            let selected_index: usize = app.state.selected().unwrap();
+            let select_hashtag: &Vec<String> = &app.hashtags[selected_index];
+            let history_group: &&Vec<String> =
+                &app.history_map.get(select_hashtag[0].as_str()).unwrap();
+
+            let mut hashtags: Vec<Vec<String>> = vec![];
+            for history in history_group.iter() {
+                if select_hashtag[0] == ALL_HASHTAG {
+                    hashtags.push(vec![history.to_owned()]);
+                } else {
+                    hashtags.push(vec![history.to_owned()]);
+                }
             }
+
+            app.header_cells = vec![select_hashtag[0].clone()];
+            if select_hashtag[0] == ALL_HASHTAG {
+                app.view_id = ALL_COMMAND_VIEW_ID;
+            } else {
+                app.view_id = HASHTAG_COMMAND_VIEW_ID;
+            }
+            hashtags.reverse();
+            app.hashtags = hashtags;
+            app.state.select(Some(0));
+            app.table_title = SELECT_COMMAND_TITLE;
+        } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Enter {
+            let selected_index: usize = app.state.selected().unwrap();
+            let select_command: &Vec<String> = &app.hashtags[selected_index];
+            return select_command[0].to_owned();
+        } else if app.table_title == SELECT_COMMAND_TITLE && key_code == KeyCode::Left {
+            app.hashtags = app.hashtags_memo.clone();
+            app.header_cells = app.select_hashtag_header.to_owned();
+            app.state.select(Some(0));
+            app.table_title = SELECT_HASHTAG_TITLE;
+            app.view_id = HASHTAG_VIEW_ID;
         }
     }
 }
