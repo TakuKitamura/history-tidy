@@ -222,23 +222,39 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
 
         if app.edit_mode {
             if key_code == KeyCode::Enter {
-                // app.messages.push(app.input.drain(..).collect());
-                // app.debug = format!("{}", app.input);
-                let saved_hashtag = "#".to_owned() + &app.input;
-                let hashtags: Vec<Hashtag> =
-                    HashtagParser::new(&saved_hashtag).collect::<Vec<Hashtag>>();
-                // app.error_message = format!("{:?}", hashtags);
-                if hashtags.len() != 1 {
-                    app.error_message = "invalid hashtag(1)".to_owned();
-                } else if hashtags[0].end != app.input.chars().count() {
-                    app.error_message = "invalid hashtag(2)".to_owned();
-                    continue;
+                if app.table_title == SELECT_HASHTAG_TITLE {
+                    let hashtags: Vec<Hashtag> =
+                        HashtagParser::new(&app.input).collect::<Vec<Hashtag>>();
+                    app.error_message = format!("{:?}", hashtags);
+                    if hashtags.len() != 1 {
+                        app.error_message = "invalid hashtag(1)".to_owned();
+                    } else if hashtags[0].end + 1 != app.input.chars().count() {
+                        app.error_message = "invalid hashtag(2)".to_owned();
+                    } else {
+                        // app.error_message = app.input.clone();
+                        // app.hashtags[app.state.selected().unwrap()][0] = app.input.to_owned();
+                        // app.hashtags_memo[app.state.selected().unwrap()][0] = app.input.to_owned();
+
+                        // app.error_message = format!("{:?}", app.hashtags);
+                        app.error_message = format!("{:?}", app.history_map);
+                        app.edit_mode = false;
+                    }
                 } else {
-                    app.error_message = String::new();
                     app.edit_mode = false;
                 }
             } else if key_code == KeyCode::Backspace {
                 if app.input.len() > 0 {
+                    if app.table_title == SELECT_HASHTAG_TITLE {
+                        if app.input.len() == 1 {
+                            continue;
+                        }
+                    } else {
+                        app.error_message = app.input.to_owned();
+                        if app.input.len() == 2 {
+                            continue;
+                        }
+                    }
+
                     let last_char: char = app.input.pop().unwrap();
                     if last_char == '\n' {
                         app.input.pop();
@@ -267,12 +283,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
             let select_item = app.get_select_item();
             let hashtag_name: String = select_item[0].to_owned();
             if hashtag_name != ALL_HASHTAG {
-                app.input = select_item[0]
-                    .to_owned()
-                    .split("#")
-                    .last()
-                    .unwrap()
-                    .to_owned();
+                if app.table_title == SELECT_HASHTAG_TITLE {
+                    app.input = select_item[0].to_owned();
+                } else {
+                    app.input = "$ ".to_owned() + &select_item[0];
+                }
                 app.edit_mode = true;
             }
         } else if key_code == KeyCode::Down {
