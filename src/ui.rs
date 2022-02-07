@@ -232,7 +232,15 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> String {
                         app.error_message = "invalid hashtag(2)".to_owned();
                     } else {
                         // app.error_message = app.input.clone();
-                        // app.hashtags[app.state.selected().unwrap()][0] = app.input.to_owned();
+                        let selected_index = app.state.selected().unwrap();
+                        let original_hashtag = app.hashtags[selected_index].clone();
+                        app.hashtags[selected_index][0] = app.input.to_owned();
+                        // app.history_map[&app.input.to_owned()] = original_hashtag.clone();
+                        app.history_map
+                            .insert(app.input.to_owned(), original_hashtag.to_owned());
+                        app.history_map.remove(&original_hashtag[0].to_owned());
+
+                        app.hashtags_memo = app.hashtags.clone();
                         // app.hashtags_memo[app.state.selected().unwrap()][0] = app.input.to_owned();
 
                         // app.error_message = format!("{:?}", app.hashtags);
